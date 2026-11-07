@@ -83,7 +83,8 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
 - **Automations**: scheduled agent prompts, through the `herdr-automations` CLI.
 - Keys (merge `keys.json`): `cmd-n` new worktree, `cmd-shift-n` add project, `cmd-g` VS Code,
   `cmd-shift-e` Excalidraw; in this layout `cmd-shift-a` toggles Agents, `cmd-shift-b` the right
-  panel, `cmd-w` / `cmd-shift-w` close a tab / pane.
+  panel, `cmd-w` / `cmd-shift-w` close a tab / pane. Closing a tab by key asks first ("Close tab
+  …?", Enter confirms); the tab's ×, its menu's Close and a pane's close button don't.
 
 ## Built from
 
