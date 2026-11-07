@@ -129,6 +129,9 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
 - **Files**: clicking a file opens it in its own tab (Markdown rendered with a Source toggle), reusing
   the tab already showing it; right-click opens it in your apps. Git-ignored files and folders (and
   everything under an ignored folder) are greyed out; symlinks show a link icon after their name.
+  Code is colored by the **Code colors** setting (Mod settings): Editor (default; a soft palette for
+  light and dark), Terminal (the theme's ANSI colors) or Off. `.env`, `.env.*`, `*.env` and `.envrc`
+  highlight as shell.
 - **Changes**: staging, commit/amend, history, diffs in one centre tab (Better Changes' own docs).
 - **Automations**: scheduled agent prompts, through the `herdr-automations` CLI.
 - Keys (merge `keys.json`): `cmd-n` new worktree, `cmd-shift-n` add project, `cmd-g` VS Code,
@@ -195,6 +198,9 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   with a new shell pid and nothing running; terminals still being recovered are held 15 min.
 - Ticking "Resume automatically next time" writes `after_restart` into `mods/hibernate/mod.json`,
   which reloads the mod.
+- The code view tags `//`, `/*` and string quotes as `punctuation`, which beats `comment`, and
+  only the documented syntax names take effect; so comments and punctuation share one gray
+  (`#8b949e` dark, `#6e7781` light) or a comment's slashes would differ from its text.
 - The hover card is a `window` overlay (doesn't take the keyboard); worktree badges need `gh`.
 - Remote machines: prefill falls back to the clipboard; media and watchers are local-only.
 - `herdr.yaml` / `orca.yaml` are parsed only for `scripts.setup` (one line, or a `|` / `>` block),
