@@ -70,6 +70,11 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   menu) and **+** (Create worktree for that repo). Hovering any row ~450ms opens the **hover card**:
   Pull request, Issue and Live ports sections; a row opens the viewer, icons copy the link or open
   GitHub, a port opens in the browser; it closes 250ms after the pointer leaves row and card.
+  Every **+** for a new space (the Spaces header, a machine's header, "New space there", and
+  "New space" in the menu) starts it in that machine's home folder.
+- **Close & remove worktree** (space menu, or closing a worktree space's last tab): when another
+  open space on the same machine is in that checkout, the dialog turns into **Close space**: the
+  folder shows Kept, it names the other space, and only this space closes.
 - **Badges**: click opens the issue/PR viewer; ⌘-click opens GitHub.
 - **Sleep a space** (space menu → **Sleep space**, or **Sleep** in the resource meter): every program
   in its tabs is recorded (argv, folder, and for Claude its session id from
@@ -179,6 +184,10 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   the card or `setShared` (which redraws every mod in the window): `spaces.js` only treats a hover
   as real when the pointer moved in the last 150ms, writes `better-sidebar.hover` only while a card
   is open, and gives the scroll area a stable `.id("spaces-list")`.
+- `space.new` without a folder starts where the focused terminal is. From a worktree, that opens a
+  second space on the same worktree, and removing either one deletes the folder under both: always
+  pass the machine and its home (a remote's comes from `printenv HOME` there, cached), and check
+  for other spaces on the checkout before `git worktree remove`.
 - Never stop a program with ctrl+c: Herdr starts agents through `zsh -lic '"$@"; exec "$0" -li'`,
   and SIGINT makes that wrapper abort and close the pane instead of returning to a prompt.
 - "When Herdr starts" compares Herdr.app's process start time with the last one seen, since the
