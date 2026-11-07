@@ -1,3 +1,4 @@
+// Adapted from t3-actions in JinJieBeWater/herdr-t3 (https://github.com/JinJieBeWater/herdr-t3), Apache-2.0; modified here.
 // node mods/t3-actions/check.cjs: main.js runs on inert elements, every view reached without a window.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

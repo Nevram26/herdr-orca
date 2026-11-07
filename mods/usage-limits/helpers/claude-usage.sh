@@ -5,7 +5,8 @@
 # request; the CLI authenticates itself. This script reads no tokens or
 # credential files, sends no prompt and starts no turn. `--safe-mode` keeps
 # hooks, MCP servers and customizations out of it.
-# Approach credit: jmalicki/herdr-mod-ai-usage (MIT).
+# Approach credit: Joseph Malicki's jmalicki/herdr-mod-ai-usage (MIT), whose
+# collector asks the claude CLI for usage this way. No code is copied from it.
 #
 # Exit: 0 = printed the reply, 127 = claude CLI not found, 1 = no reply in 15 s.
 # Override the binary with HERDR_USAGE_CLAUDE_BIN.

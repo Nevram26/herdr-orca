@@ -7,7 +7,7 @@ HOME_DIR="${HERDR_APP_HOME:-$HOME/.config/herdr-app}"
 for mod in mods/*/; do
   name=$(basename "$mod")
   rsync -a --delete --exclude gpui-kit.d.ts --exclude herdr.d.ts --exclude jsconfig.json \
-    --exclude node_modules --exclude .cache --exclude .DS_Store --exclude CHANGES.md \
+    --exclude node_modules --exclude .cache --exclude .DS_Store \
     "$HOME_DIR/mods/$name/" "mods/$name/"
 done
 # The layout is orca-2 in the author's Herdr; here it's orca.

@@ -1,5 +1,7 @@
 #!/bin/sh
 # Prints Codex's rate limits as one JSON line and exits.
+# Approach credit: Joseph Malicki's jmalicki/herdr-mod-ai-usage (MIT), whose collector
+# reads `codex app-server` account/rateLimits/read. No code is copied from it.
 #
 # Asks `codex app-server` (JSON-RPC: initialize, initialized,
 # account/rateLimits/read); Codex authenticates itself and this script reads no

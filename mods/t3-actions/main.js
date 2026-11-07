@@ -1,3 +1,4 @@
+// Adapted from t3-actions in JinJieBeWater/herdr-t3 (https://github.com/JinJieBeWater/herdr-t3), Apache-2.0; modified here.
 // Actions, as T3 Code's run button: commands you start with one click, kept in shared state.
 // In a bar it draws "▶ Dev | ▾", sized to fit its block; the menu and the editor are this mod opened as overlays.
 import { View, div, svg } from "gpui-kit";
