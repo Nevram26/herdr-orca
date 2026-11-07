@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Orca layout preview</title>
+<link rel="stylesheet" href="herdr.css">
+<style>
+  body { width: 1600px; height: 880px; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+  .body { flex: 1; display: flex; min-height: 0; }
+  .side { width: 268px; flex: none; display: flex; flex-direction: column; background: var(--chrome); border-right: 1px solid var(--border); }
+  .nav { height: 31px; padding: 0 16px; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+  .sec { padding: 10px 16px 6px; display: flex; align-items: center; font-size: 11.5px; color: var(--dim); }
+  .grp { margin: 4px 8px 0; padding-bottom: 4px; border-radius: 9px; background: #5b8def12; }
+  .grph { height: 30px; padding: 0 4px 0 8px; display: flex; align-items: center; gap: 8px; }
+  .sp { padding: 6px 8px; border-radius: 8px; margin: 0 4px 0 12px; }
+  .sp.active { background: var(--selected); }
+  .sp .t { display: flex; align-items: center; gap: 9px; }
+  .sp .d { display: flex; align-items: center; gap: 6px; height: 20px; font-size: 11.5px; color: var(--dim); }
+  .av { width: 18px; height: 18px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; flex: none; }
+  .agent { height: 30px; padding: 0 16px; display: flex; align-items: center; gap: 10px; font-size: 12.8px; }
+  .work { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .tabs { height: 42px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 12px; background: var(--chrome); border-bottom: 1px solid var(--border); }
+  .tab { height: 29px; padding: 0 10px; display: flex; align-items: center; gap: 7px; border-radius: 7px; color: var(--muted); font-size: 12.8px; }
+  .tab.on { background: var(--raised); border: 1px solid var(--border); color: var(--fg); }
+  .area { flex: 1; display: flex; gap: 8px; padding: 8px; background: var(--canvas); min-height: 0; }
+  .pane { flex: 1; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); overflow: hidden; min-width: 0; }
+  .pane.focus { border-color: var(--accent); }
+  .ph { height: 30px; padding: 0 10px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .tt { padding: 14px 16px; font: 12.5px/1.65 var(--mono); color: var(--muted); }
+  .panelr { width: 330px; flex: none; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); overflow: hidden; }
+  .frow { height: 28px; padding: 0 8px; display: flex; align-items: center; gap: 6px; border-radius: 7px; font-size: 13px; }
+  .status { height: 28px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--chrome); border-top: 1px solid var(--border); font-size: 11.8px; color: var(--muted); }
+  .card { position: absolute; left: 276px; top: 214px; width: 340px; padding: 5px; }
+  .ci { padding: 6px 8px; display: flex; gap: 9px; border-radius: 7px; }
+  .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #d2992255; border-top-color: var(--amber); flex: none; }
+</style></head>
+<body><script src="icons.js"></script>
+<div class="body">
+  <div class="side">
+    <div class="row" style="height: 46px; padding: 0 12px 0 76px; gap: 8px"><span class="av" style="background: #e6e8eb; color: #17191d">H</span><b class="grow">Herdr</b><svg class="i dim"><use href="#search"/></svg><svg class="i dim"><use href="#split"/></svg></div>
+    <div style="padding: 4px 0 8px">
+      <div class="nav"><svg class="i"><use href="#zap"/></svg>Automations</div>
+      <div class="nav"><svg class="i"><use href="#issue"/></svg>Issues</div>
+      <div class="nav"><svg class="i"><use href="#settings"/></svg>Mod settings</div>
+    </div>
+    <div class="sec"><span class="grow">Spaces</span><svg class="i"><use href="#folder"/></svg>&nbsp;&nbsp;<svg class="i"><use href="#plus"/></svg></div>
+    <div class="grp">
+      <div class="grph"><svg class="i muted"><use href="#folder"/></svg><b class="grow">Acme</b><span class="dim" style="font-size: 11px">3</span><span class="ibtn" style="width: 22px"><svg class="i"><use href="#plus"/></svg></span><span class="ibtn" style="width: 22px"><svg class="i"><use href="#dots"/></svg></span><svg class="i dim" style="width: 12px"><use href="#chev-down"/></svg></div>
+      <div class="sp" style="background: var(--hover)"><div class="t"><span class="av" style="background: #22a99a">S</span><span class="grow">storefront</span><span class="ibtn" style="width: 22px; height: 22px"><svg class="i" style="width: 13px"><use href="#chev-down"/></svg></span><span class="ibtn" style="width: 22px; height: 22px"><svg class="i" style="width: 13px"><use href="#dots"/></svg></span><span class="ibtn" style="width: 22px; height: 22px; color: var(--fg)"><svg class="i" style="width: 13px"><use href="#plus"/></svg></span></div><div class="d" style="padding-left: 27px">main <span class="badge">primary</span></div></div>
+      <div class="sp active"><div class="t" style="padding-left: 22px"><svg class="i dim" style="width: 13px"><use href="#git-branch"/></svg><span class="grow trunc">Saved carts</span></div><div class="d" style="padding-left: 44px"><span class="grow trunc">dev/feat/198</span><svg class="i muted" style="width: 13px"><use href="#plug"/></svg><span class="row green" style="gap: 3px"><svg class="i" style="width: 13px"><use href="#issue"/></svg>#198</span><span class="row green" style="gap: 3px"><svg class="i" style="width: 13px"><use href="#pull"/></svg>#212</span></div></div>
+      <div class="sp"><div class="t" style="padding-left: 22px"><svg class="i dim" style="width: 13px"><use href="#git-branch"/></svg><span class="grow trunc">Checkout redesign</span></div><div class="d" style="padding-left: 44px"><span class="grow trunc">dev/feat/203</span><span class="row" style="gap: 3px; color: #6e7681"><svg class="i" style="width: 13px"><use href="#pull"/></svg>#207</span></div></div>
+      <div class="sp"><div class="t"><span class="av" style="background: #8b7cf6">A</span><span class="grow">api</span></div><div class="d" style="padding-left: 27px">main <span class="badge">primary</span><span class="grow"></span><svg class="i muted" style="width: 13px"><use href="#plug"/></svg></div></div>
+    </div>
+    <div class="sp" style="margin: 6px 8px 0 12px"><div class="t"><span class="av" style="background: #d9649a">D</span><span class="grow">dotfiles</span></div><div class="d" style="padding-left: 27px">main <span class="badge">primary</span></div></div>
+    <div class="grow"></div>
+    <div class="sec" style="border-top: 1px solid var(--border); padding-top: 12px"><span class="grow">Agents</span></div>
+    <div class="agent"><span class="av" style="background: var(--clay)">✻</span><span class="grow trunc">Saved carts <span class="dim">· Claude</span></span><span class="spin"></span></div>
+    <div class="agent"><span class="av" style="background: var(--clay)">✻</span><span class="grow trunc">Checkout redesign <span class="dim">· Claude</span></span><span class="tag" style="border: 0; background: #d2992226; color: var(--amber); font-weight: 600">Needs you</span></div>
+    <div class="agent" style="margin-bottom: 8px"><span class="av" style="background: #e6e8eb; color: #111">&gt;</span><span class="grow trunc">api <span class="dim">· Codex</span></span><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--green)"></span></div>
+    <div class="row" style="height: 34px; padding: 0 16px; gap: 10px; border-top: 1px solid var(--border); color: var(--muted)"><svg class="i"><use href="#gear"/></svg><span class="grow">Settings</span></div>
+    <div class="row" style="height: 34px; padding: 0 16px 6px; gap: 10px; color: var(--muted)"><svg class="i"><use href="#plus"/></svg>Add machine</div>
+  </div>
+
+  <div class="work">
+    <div class="tabs">
+      <span class="tab on"><svg class="i" style="fill: var(--clay); stroke: none"><use href="#spark"/></svg>Claude</span>
+      <span class="tab"><svg class="i"><use href="#terminal"/></svg>Dev</span>
+      <span class="ibtn"><svg class="i"><use href="#plus"/></svg></span>
+      <span class="grow"></span>
+      <span class="row" style="height: 24px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px"><span class="row" style="padding: 0 8px; gap: 8px"><svg class="i"><use href="#play"/></svg>Dev</span><span style="width: 1px; height: 14px; background: var(--border)"></span><span class="row" style="padding: 0 6px; color: var(--dim)"><svg class="i" style="width: 12px"><use href="#chev-down"/></svg></span></span>
+      <span class="ibtn" style="color: var(--fg)"><svg class="i"><use href="#panel"/></svg></span>
+    </div>
+    <div class="area">
+      <div class="pane focus">
+        <div class="ph"><svg class="i" style="fill: var(--clay); stroke: none"><use href="#spark"/></svg><b style="font-weight: 500">Claude Code</b><span class="dim grow">~/.herdr/worktrees/storefront/dev-feat-198</span><span class="spin"></span></div>
+        <div class="tt">
+          <div style="color: var(--clay)">✻ Claude Code</div>
+          <div style="margin-top: 8px">&gt; Work on GitHub issue #198 in acme/storefront: "Saved carts for signed-in shoppers".</div>
+          <div style="margin-top: 8px; color: var(--fg)">● Reading the issue and the cart service first.</div>
+          <div>&nbsp; ⎿ <span class="blue">gh issue view 198 --comments</span></div>
+          <div style="margin-top: 8px; color: var(--fg)">● Adding <span class="blue">CartService.merge()</span> and a <span class="blue">carts</span> migration.</div>
+          <div>&nbsp; ⎿ Wrote <span style="color: var(--fg)">src/cart/merge.ts</span> (+86)</div>
+          <div>&nbsp; ⎿ Wrote <span style="color: var(--fg)">db/migrations/0042_carts.sql</span> (+28)</div>
+          <div style="margin-top: 8px" class="amber">✶ Running tests… (34s · ↓ 2.1k tokens)</div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="ph"><svg class="i muted"><use href="#terminal"/></svg><b style="font-weight: 500">Dev</b><span class="dim grow">~/.herdr/worktrees/storefront/dev-feat-198</span></div>
+        <div class="tt">
+          <div><span class="green">➜</span> dev-feat-198 <span class="blue">git:(dev/feat/198)</span> bun run dev</div>
+          <div>$ next dev --turbo</div>
+          <div>&nbsp; ▲ Next.js 15.2</div>
+          <div>&nbsp; - Local: &nbsp; <span style="color: var(--fg)">http://localhost:3000</span></div>
+          <div>&nbsp; ✓ Ready in 1.4s</div>
+          <div>&nbsp; ○ Compiling /cart …</div>
+          <div>&nbsp; ✓ Compiled /cart in 412ms</div>
+        </div>
+      </div>
+      <div class="panelr">
+        <div class="row" style="height: 42px; padding: 0 14px 0 6px; gap: 4px; border-bottom: 1px solid var(--border)">
+          <span class="tab on" style="font-size: 12.8px">Changes <span class="badge">5</span></span><span class="tab">Commits <span class="badge">2</span></span><span class="grow"></span><svg class="i dim"><use href="#refresh"/></svg>&nbsp;<svg class="i dim"><use href="#dots"/></svg>
+        </div>
+        <div style="padding: 6px; flex: 1">
+          <div class="frow muted" style="font-size: 11px"><svg class="i dim" style="width: 12px"><use href="#chev-down"/></svg><b style="font-weight: 500">Staged</b><span class="badge">2</span><span class="grow"></span><span class="dim">− Unstage all</span></div>
+          <div class="frow"><svg class="i muted"><use href="#file"/></svg><span class="grow">merge.ts</span><span class="green" style="font-size: 11px">+86</span><span class="green" style="font-size: 11px">A</span></div>
+          <div class="frow"><svg class="i muted"><use href="#file"/></svg><span class="grow">0042_carts.sql</span><span class="green" style="font-size: 11px">+28</span><span class="green" style="font-size: 11px">A</span></div>
+          <div class="frow muted" style="font-size: 11px; margin-top: 4px; border-top: 1px solid var(--border)"><svg class="i dim" style="width: 12px"><use href="#chev-down"/></svg><b style="font-weight: 500">Unstaged</b><span class="badge">3</span><span class="grow"></span><span class="dim">+ Stage all</span></div>
+          <div class="frow"><svg class="i muted"><use href="#file"/></svg><span class="grow">cart-service.ts</span><span class="green" style="font-size: 11px">+14</span><span class="red" style="font-size: 11px">−3</span><span class="amber" style="font-size: 11px">M</span></div>
+          <div class="frow"><svg class="i muted"><use href="#file"/></svg><span class="grow">session.ts</span><span class="green" style="font-size: 11px">+4</span><span class="amber" style="font-size: 11px">M</span></div>
+          <div class="frow"><svg class="i muted"><use href="#file"/></svg><span class="grow">merge.test.ts</span><span class="green" style="font-size: 11px">+52</span><span class="green" style="font-size: 11px">A</span></div>
+        </div>
+        <div class="col" style="padding: 10px; gap: 8px; border-top: 1px solid var(--border)">
+          <div style="height: 84px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px" class="dim">Commit message</div>
+          <div class="row" style="gap: 1px"><span class="row grow" style="height: 32px; justify-content: center; gap: 7px; border-radius: 8px 0 0 8px; background: var(--fg); color: #17191d; font-size: 12px; font-weight: 500">Commit</span><span class="row" style="width: 30px; height: 32px; justify-content: center; border-radius: 0 8px 8px 0; background: var(--raised)"><svg class="i" style="width: 12px"><use href="#chev-down"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="status">
+  <span class="dim">Used</span>
+  <span class="row" style="gap: 6px"><span class="av" style="width: 14px; height: 14px; border-radius: 3px; background: var(--clay); font-size: 8px">✻</span><span style="color: var(--fg)">5h 38%</span><span class="dim">·</span><span style="color: var(--fg)">wk 54%</span><span class="dim">·</span><span class="amber">Opus 76%</span></span>
+  <span class="row" style="gap: 6px"><span class="av" style="width: 14px; height: 14px; border-radius: 3px; background: #e6e8eb; color: #111; font-size: 8px">&gt;</span><span style="color: var(--fg)">5h 12%</span></span>
+  <span class="grow"></span><span class="dim">⌘⇧P commands</span>
+  <span class="row" style="gap: 5px; color: var(--fg)"><svg class="i" style="width: 13px"><use href="#plug"/></svg>3</span><span>This computer</span>
+</div>
+
+<div class="card panel">
+  <div class="menulabel">Pull request</div>
+  <div class="ci" style="background: var(--hover)"><svg class="i green" style="margin-top: 2px"><use href="#pull"/></svg><div class="col grow" style="gap: 2px"><span class="trunc" style="font-size: 12.8px">Add saved carts for signed-in shoppers</span><span class="dim" style="font-size: 11px">#212 · <span class="green">Open</span> · acme/storefront</span></div><svg class="i dim"><use href="#copy"/></svg><svg class="i dim"><use href="#external"/></svg></div>
+  <div style="height: 1px; margin: 4px 3px; background: var(--border)"></div>
+  <div class="menulabel">Issue</div>
+  <div class="ci"><svg class="i green" style="margin-top: 2px"><use href="#issue"/></svg><div class="col grow" style="gap: 2px"><span class="trunc" style="font-size: 12.8px">Saved carts for signed-in shoppers</span><span class="dim" style="font-size: 11px">#198 · <span class="green">Open</span> · acme/storefront</span></div><svg class="i dim"><use href="#copy"/></svg><svg class="i dim"><use href="#external"/></svg></div>
+  <div style="height: 1px; margin: 4px 3px; background: var(--border)"></div>
+  <div class="menulabel">Live ports · 2</div>
+  <div class="frow"><span style="width: 6px; height: 6px; border-radius: 3px; background: var(--amber)"></span><span class="mono" style="width: 44px; font-size: 12px">3000</span><span class="muted" style="font-size: 12px">node</span><span class="dim" style="font-size: 11px">localhost:3000</span></div>
+  <div class="frow"><span style="width: 6px; height: 6px; border-radius: 3px; background: var(--amber)"></span><span class="mono" style="width: 44px; font-size: 12px">5432</span><span class="muted" style="font-size: 12px">postgres</span><span class="dim" style="font-size: 11px">localhost:5432</span></div>
+</div>
+</body></html>

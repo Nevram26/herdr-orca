@@ -6,6 +6,8 @@ framed panes with headers; a hideable right panel with Files and Git changes; an
 Claude/Codex usage limits and live ports. GitHub issues and PRs open in-app, and new worktrees come
 from a branch, an issue, a PR or a new name.
 
+![Orca](preview.png)
+
 ## What you see
 
 Left to right, top to bottom. No system title bar (`"titlebar": "none"`); macOS traffic lights sit

@@ -5,6 +5,8 @@ badges, a hover card per worktree, in-app GitHub issues and pull requests, a Cre
 (from a branch, an issue, a PR or a new name), Files and Git changes panels, run actions, usage
 limits and live ports.
 
+![Orca](preview.png)
+
 See [RECIPE.md](RECIPE.md) for what it does and how it's built, and
 [THIRD_PARTY.md](THIRD_PARTY.md) for credits and licenses. The issues, live ports, usage limits and
 actions mods are also published on their own in
@@ -41,6 +43,8 @@ tested on macOS with Herdr 0.1.13.
 ## Updating this repo
 
 `./sync.sh` copies the layout and these mods from your Herdr home into the repo.
+`previews/render.sh` redraws `preview.png` from `previews/preview.html` with headless Chrome:
+the preview is an HTML mockup with demo data, so no screenshot of your own work is published.
 
 ## License
 
