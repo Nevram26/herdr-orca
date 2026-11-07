@@ -1,0 +1,12 @@
+{
+  "place": "none",
+  "title": "Create worktree",
+  "settings": {
+    "issue_branch": "dev/feat/{number}"
+  },
+  "overlay": {
+    "kind": "dialog",
+    "width": 560,
+    "height": 780
+  }
+}

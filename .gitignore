@@ -1,0 +1,5 @@
+.DS_Store
+*.d.ts
+jsconfig.json
+node_modules/
+mods/*/.cache/

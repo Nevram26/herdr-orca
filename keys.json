@@ -1,0 +1,17 @@
+{
+  "global": {
+    "cmd-n": "mod.open:new-worktree",
+    "cmd-g": "mod.open:open-vscode",
+    "cmd-shift-e": "mod.open:excalidraw",
+    "cmd-shift-n": "mod.open:new-project"
+  },
+  "terminal": {
+    "cmd-shift-e": "mod.open:excalidraw"
+  },
+  "layout:orca": {
+    "cmd-shift-a": "layout.toggle:agents",
+    "cmd-shift-b": "better-sidebar.toggle-panel",
+    "cmd-w": "my-tabs.close-tab",
+    "cmd-shift-w": "my-tabs.close-pane"
+  }
+}

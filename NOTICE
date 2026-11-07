@@ -1,0 +1,13 @@
+Orca for Herdr
+Copyright 2026 VladTemp27
+
+This layout's mods include code adapted from Herdr Desktop's shipped mods
+(https://github.com/herdrdev/herdr-app), licensed under the Apache License, Version 2.0.
+
+mods/better-sidebar is Better Sidebar from munza/herdr-mods
+(https://github.com/munza/herdr-mods), Copyright 2026 Tawsif Aqib, licensed under the
+Apache License, Version 2.0, and modified here (see mods/better-sidebar/CHANGES.md).
+Its NOTICE is kept in licenses/munza-herdr-mods-NOTICE.txt.
+
+mods/excalidraw bundles Excalidraw (MIT) and mods/file-icons bundles icons from the
+Material Icon Theme (MIT); their notices are in those folders.
