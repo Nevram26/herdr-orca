@@ -62,17 +62,19 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   `issue_branch` in `mods/new-worktree/mod.json`) or the branch of the open PR that closes them.
   With Claude chosen, an issue/PR task is pasted into Claude's prompt but not sent. One create per
   dialog. When the project has a setup script, a **Setup script** row offers **Run** / **Skip**.
-- **Worktree setup hooks** (Orca-compatible): a new worktree runs the repo's `orca.yaml`
-  `scripts.setup` (shared with the team, first) and then the project's local setup script, with
-  `ORCA_ROOT_PATH`, `ORCA_WORKTREE_PATH`, `ORCA_WORKSPACE_NAME` (plus `CONDUCTOR_ROOT_PATH`,
-  `HERDR_ROOT_PATH`, `HERDR_WORKTREE_PATH`). Run by default, skip by default, or ask every time.
-  "Wait for setup" runs it first and then the agent in one terminal; otherwise the agent starts at
-  once and setup runs in a split below it. It reports "Setup finished." or "Setup failed (exit N)."
+- **Worktree setup hooks**: a new worktree runs the repo's team script (`scripts.setup` in
+  `herdr.yaml`, else Orca's `orca.yaml`, first) and then the project's local setup script, with
+  `HERDR_ROOT_PATH`, `HERDR_WORKTREE_PATH`, `HERDR_WORKSPACE_NAME` (Orca's `ORCA_*` names and
+  `CONDUCTOR_ROOT_PATH` are set too, so Orca scripts run unchanged). It runs in your login shell
+  (`$SHELL -lic`), so tools your profile puts on PATH (pnpm, nvm, mise) are found. Run by default,
+  skip by default, or ask every time. "Wait for setup" runs it first and then the agent in one
+  terminal; otherwise the agent starts at once and setup runs in its own **Setup** tab, with the
+  agent's tab kept in front. It reports "Setup finished." or "Setup failed (exit N)."
 - **Project settings** (space menu → Project settings…): display name and icon (Automatic, Emoji or
   Letter, with a colour);
   **Worktrees**: default base branch, worktree location (instead of `~/.herdr/worktrees/<repo>`),
   issue branch name (`{number}`, `{slug}`), default agent; **Worktree hooks**: the variables (hover
-  for what each holds), the `orca.yaml` script read-only, the local setup script (saved on this
+  for what each holds), the team script (`herdr.yaml` or `orca.yaml`) read-only, the local setup script (saved on this
   machine), **When to run** (Ask every time / Run by default / Skip by default) and **Wait for setup
   to complete before starting agent**; and Remove project.
 - **Files**: clicking a file opens it in its own tab (Markdown rendered with a Source toggle), reusing
@@ -120,7 +122,8 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   and the branch name.
 - The hover card is a `window` overlay (doesn't take the keyboard); worktree badges need `gh`.
 - Remote machines: prefill falls back to the clipboard; media and watchers are local-only.
-- `orca.yaml` is parsed only for `scripts.setup` (one line, or a `|` / `>` block), not as full YAML.
+- `herdr.yaml` / `orca.yaml` are parsed only for `scripts.setup` (one line, or a `|` / `>` block),
+  not as full YAML. `herdr.yaml` wins when both exist.
   The setup script also runs when Create opens an existing checkout that has no space open yet.
 
 ## Done when
@@ -130,9 +133,9 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
 - A repo row shows ⌄ ⋯ + on hover; + opens Create worktree on that repo.
 - Picking a remote-only branch creates a tracking worktree and a space; a picked issue fills
   `dev/feat/N` and its title; pressing ⌘↵ twice makes one space.
-- A repo with `scripts: setup: echo $ORCA_WORKTREE_PATH` in its `orca.yaml` (or a local script in
+- A repo with `scripts: setup: echo $HERDR_WORKTREE_PATH` in its `herdr.yaml` (or a local script in
   Project settings) prints the new worktree's path and "Setup finished." when a worktree is created;
-  with "Wait for setup" off, it runs in a split under the agent.
+  with "Wait for setup" off, it runs in a Setup tab beside the agent's.
 - A worktree with a linked issue and PR shows both badges; hovering shows the card; clicking a badge
   opens the viewer with PR tabs and the merge card.
 - Clicking a Markdown file in Files opens it rendered in a new tab; clicking it again reuses the tab.

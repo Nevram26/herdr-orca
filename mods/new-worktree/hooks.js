@@ -1,7 +1,20 @@
 // Worktree hooks shared by project-settings and new-worktree (an identical copy lives in
-// each; keep them in sync). Orca-compatible: orca.yaml's scripts.setup and the ORCA_* variables.
+// each; keep them in sync). Herdr's own herdr.yaml and HERDR_* variables; Orca's orca.yaml and ORCA_* names still work.
 
-// A script under orca.yaml's `scripts:` (a | or > block, or a one-line value); null when absent.
+// The team's file in the repo: herdr.yaml, else Orca's orca.yaml (same format).
+export const TEAM_FILES = ["herdr.yaml", "orca.yaml"];
+
+// The team's setup script: { file, script } from the first of TEAM_FILES that has one, else null.
+// read(path) resolves with the file's text or null (readTextFile with the machine bound).
+export async function teamScript(read, root, name = "setup") {
+  for (const file of TEAM_FILES) {
+    const script = yamlScript(await read(`${root}/${file}`).catch(() => null), name);
+    if (script) return { file, script };
+  }
+  return null;
+}
+
+// A script under a yaml file's `scripts:` (a | or > block, or a one-line value); null when absent.
 export function yamlScript(text, name = "setup") {
   if (!text) return null;
   const lines = text.split(/\r?\n/);
@@ -29,14 +42,14 @@ export function yamlScript(text, name = "setup") {
 }
 
 export const HOOK_VARS = [
-  ["ORCA_ROOT_PATH", "The project's main checkout"],
-  ["ORCA_WORKTREE_PATH", "The new worktree's folder"],
-  ["ORCA_WORKSPACE_NAME", "The new worktree's folder name"],
+  ["HERDR_ROOT_PATH", "The project's main checkout"],
+  ["HERDR_WORKTREE_PATH", "The new worktree's folder"],
+  ["HERDR_WORKSPACE_NAME", "The new worktree's folder name"],
 ];
 
-// For `env`: Orca's names (scripts written for Orca work unchanged), Conductor's, and Herdr aliases.
+// For `env`: Herdr's names, plus Orca's and Conductor's so scripts written for them run unchanged.
 export function hookEnv(root, worktree) {
   const name = worktree.split("/").pop();
-  return [`ORCA_ROOT_PATH=${root}`, `ORCA_WORKTREE_PATH=${worktree}`, `ORCA_WORKSPACE_NAME=${name}`,
-    `CONDUCTOR_ROOT_PATH=${root}`, `HERDR_ROOT_PATH=${root}`, `HERDR_WORKTREE_PATH=${worktree}`];
+  return [`HERDR_ROOT_PATH=${root}`, `HERDR_WORKTREE_PATH=${worktree}`, `HERDR_WORKSPACE_NAME=${name}`,
+    `ORCA_ROOT_PATH=${root}`, `ORCA_WORKTREE_PATH=${worktree}`, `ORCA_WORKSPACE_NAME=${name}`, `CONDUCTOR_ROOT_PATH=${root}`];
 }

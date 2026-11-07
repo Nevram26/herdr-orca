@@ -5,7 +5,7 @@ import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar } from "gpui-base";
 import { run, props, closeOverlay, theme, spaces, panes, focused, exec, home, appHome, knownAgents, readTextFile, notify, window, shared } from "herdr";
 import { ROOT, slug, titleSlug, tilde, git, place, repoOf, branches, openPRs, openIssues, prFor, badBranch, parseRef, lookup } from "./git.js";
-import { yamlScript, hookEnv } from "./hooks.js";
+import { teamScript, hookEnv } from "./hooks.js";
 
 const MODES = [
   { id: "branch", label: "Branch", icon: "git-branch", hint: "Filter branches, including ones only on origin" },
@@ -98,7 +98,8 @@ export default class NewWorktree extends View {
     if (this.project !== project) return;
     this.base = this.own().base || this.data.base;
     if (this.own().agent) this.agent = this.own().agent;
-    const yaml = yamlScript(await readTextFile(`${project.main}/orca.yaml`, { on: this.on }).catch(() => null));
+    // The team's script (herdr.yaml, else orca.yaml) runs before this machine's own.
+    const yaml = (await teamScript((path) => readTextFile(path, { on: this.on }), project.main))?.script ?? null;
     if (this.project !== project) return;
     this.setupScript = [yaml, this.own().setup].filter(Boolean).join("\n") || null;
     // Run by default, skip by default, or ask (no answer yet: Create waits for one).
@@ -328,25 +329,31 @@ export default class NewWorktree extends View {
     const agent = this.agents.find((a) => a.name === this.agent);
     const task = this.task(agent);
     if (task) await this.prefill(task);
-    // The setup script (Worktree Hooks in project settings) runs with Orca's variables. Waiting:
-    // first, then the agent, in one terminal. Not waiting: the agent starts, setup in a split below.
+    // The setup script (Worktree Hooks in project settings) runs in your login shell ($SHELL -lic),
+    // so what your profile puts on PATH (pnpm, nvm, mise…) is there, with the HERDR_* variables.
+    // Waiting: setup, then the agent, in one terminal. Not waiting: the agent starts; setup gets its own tab.
     const script = this.setupScript && this.runSetup ? this.setupScript : null;
-    const env = ["env", ...hookEnv(this.project.main, path)];
-    const report = 'status=$?\n[ "$status" -eq 0 ] && echo "Setup finished." || echo "Setup failed (exit $status)."';
-    const shell = ["sh", "-c", 'exec "${SHELL:-zsh}" -l'];
     const where = { folder: path, ...(this.on ? { machine: this.on } : {}), ...(name ? { name } : {}) };
     if (!script) return run("space.new", { ...where, ...(agent ? { argv: agent.run } : {}) });
+    const q = (a) => `'${String(a).replace(/'/g, `'\\''`)}'`;
+    const inShell = (body) => ["env", ...hookEnv(this.project.main, path), "sh", "-c", 'exec "${SHELL:-/bin/zsh}" -lic "$1"', "sh", body];
+    // rc, not status: zsh's $status is read-only.
+    const report = 'rc=$?\nif [ "$rc" -eq 0 ]; then echo "Setup finished."; else echo "Setup failed (exit $rc)."; fi';
+    const shell = 'exec "${SHELL:-/bin/zsh}" -l';
     if (this.own().setupWait || !agent) {
-      run("space.new", { ...where, argv: [...env, "sh", "-c", `${script}\n${report}\nexec "$@"`, "sh", ...(agent ? agent.run : shell)] });
+      run("space.new", { ...where, argv: inShell(`${script}\n${report}\n${agent ? `exec ${agent.run.map(q).join(" ")}` : shell}`) });
       return;
     }
     run("space.new", { ...where, argv: agent.run });
-    // The new space shows up a moment later: split its first pane for the setup terminal.
+    // The new space shows up a moment later: add a Setup tab, then go back to the agent's tab.
     for (let i = 0; i < 30; i++) {
-      const s = spaces().find((x) => (x.machine ?? null) === (this.on ?? null) && x.folder === path);
-      const tabs = new Set((s?.tabs ?? []).map((c) => c.id));
-      const pane = s && panes().find((p) => tabs.has(p.tab) && p.terminal);
-      if (pane) return run("pane.split", { direction: "down", pane: pane.pane, argv: [...env, "sh", "-c", `${script}\n${report}\nexec "\${SHELL:-zsh}" -l`] });
+      const sp = spaces().find((x) => (x.machine ?? null) === (this.on ?? null) && x.folder === path && x.tabs?.length);
+      if (sp) {
+        const agentTab = sp.tabs[0].id;
+        run("tab.new", { space: sp.id, name: "Setup", argv: inShell(`${script}\n${report}\n${shell}`) });
+        run("tab.select", { id: agentTab });
+        return;
+      }
       await cx.sleep(200);
     }
     notify({ title: "Setup script didn't start", body: "The new space didn't appear in time; run it there yourself.", level: "warning" });

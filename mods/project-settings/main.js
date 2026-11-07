@@ -5,7 +5,7 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextareaState, Textarea } from "gpui-base";
 import { theme, props, closeOverlay, spaces, panes, agents, exec, home, shared, setShared, knownAgents, pickFolder, run, notify, readTextFile } from "herdr";
-import { yamlScript, HOOK_VARS } from "./hooks.js";
+import { teamScript, HOOK_VARS } from "./hooks.js";
 
 export const KEY = "projects.settings";
 export const projectKey = (machine, main) => JSON.stringify([machine ?? null, main]);
@@ -33,7 +33,7 @@ export default class ProjectSettings extends View {
       location: field("~/.herdr/worktrees/<project>"), issue_branch: field("dev/feat/{number}"),
     };
     // The setup script: several lines, run as one shell script.
-    this.f.setup = TextareaState.new({ placeholder: "pnpm i\nln -s $ORCA_ROOT_PATH/.env $ORCA_WORKTREE_PATH/.env" });
+    this.f.setup = TextareaState.new({ placeholder: "pnpm i\nln -s $HERDR_ROOT_PATH/.env $HERDR_WORKTREE_PATH/.env" });
     this.f.setup.set_auto_grow(4, 12);
     this.f.setup.on("change", (_e, cx) => cx.notify());
     this.when = "run"; this.wait = false; this.yamlSetup = null;
@@ -53,8 +53,9 @@ export default class ProjectSettings extends View {
       this.icon = s.icon?.kind ?? "auto"; this.color = s.icon?.color ?? "ansi6"; this.agent = s.agent ?? "";
       this.when = s.setupWhen ?? "run"; this.wait = Boolean(s.setupWait);
       cx.notify();
-      // The team's script, from orca.yaml in the repo, as Orca reads it.
-      this.yamlSetup = yamlScript(await readTextFile(`${main}/orca.yaml`, { on: this.machine }).catch(() => null));
+      // The team's script from the repo: herdr.yaml, else orca.yaml.
+      this.team = await teamScript((path) => readTextFile(path, { on: this.machine }), main);
+      this.yamlSetup = this.team?.script ?? null;
       cx.notify();
       // Every space on this machine whose checkout belongs to the project: its main one and its worktrees.
       const members = [];
@@ -161,7 +162,7 @@ export default class ProjectSettings extends View {
     const hasScript = Boolean(this.f.setup.value().trim() || this.yamlSetup);
     return v_flex()
       .child(this.section(t, "WORKTREE HOOKS"))
-      .child(div().text_size(12).text_color(t.dim).child("Scripts that run when a worktree is created. Local scripts are stored on this machine; orca.yaml scripts are shared with your team."))
+      .child(div().text_size(12).text_color(t.dim).child("Scripts that run when a worktree is created. Local scripts are stored on this machine; herdr.yaml scripts (or Orca's orca.yaml) are shared with your team."))
       .child(card()
         .child(v_flex().gap(3).child(div().text_size(14).font_semibold().child("Setup script"))
           .child(div().text_size(12.5).text_color(t.muted).child("Runs after a new worktree is created: install deps, copy env files, run migrations.")))
@@ -169,12 +170,12 @@ export default class ProjectSettings extends View {
         .child(h_flex().gap(6).flex_wrap().children(HOOK_VARS.map(([name, about]) => div().id(`ps-var-${name}`).px(8).py(3).rounded(6)
           .border_1().border_color(t.border).bg(t.raised).text_size(11.5).font_family("JetBrains Mono").text_color(t.muted).tooltip(about).child(`$${name}`))))
         .when(Boolean(this.yamlSetup), (el) => el.child(v_flex().gap(4)
-          .child(div().text_size(11.5).text_color(t.dim).child("From orca.yaml (shared with your team), runs first:"))
+          .child(div().text_size(11.5).text_color(t.dim).child(`From ${this.team?.file ?? "herdr.yaml"} (shared with your team), runs first:`))
           .child(div().p(10).rounded(8).bg(t.raised).text_size(12).font_family("JetBrains Mono").text_color(t.muted).child(this.yamlSetup))))
         .child(div().id("ps-setup").p(10).rounded(8).border_1().border_color(t.input).bg(t.popover).cursor_text()
           .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
           .child(Textarea.new(this.f.setup).w_full().text_size(12.5).font_family("JetBrains Mono").text_color(t.foreground)))
-        .child(div().text_size(11.5).text_color(t.dim).child("Runs as a single shell script. Saved on this machine.")))
+        .child(div().text_size(11.5).text_color(t.dim).child("Runs as a single shell script. Saved on this machine. Orca's ORCA_* names work too.")))
       .child(card().opacity(hasScript ? 1 : 0.55)
         .child(h_flex().gap(12).items_center()
           .child(v_flex().flex_1().gap(3).child(div().text_size(14).font_semibold().child("When to run"))
