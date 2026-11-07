@@ -720,7 +720,12 @@ export class Spaces {
   hasDetail(w, g) {
     const status = this.checkoutStatus(w);
     const moved = w.active && (g?.ahead > 0 || g?.behind > 0);
-    return Boolean(this.shownBranch(g) || moved || status?.prs.length || status?.issue || status?.error || this.ports(w).length || this.foldedSummary(w, g));
+    return Boolean(this.shownBranch(g) || moved || status?.prs.length || status?.issue || status?.error || this.ports(w).length || this.foldedSummary(w, g) || this.sleeping(w));
+  }
+
+  // Set by the hibernate mod while a space is asleep: { at, count }.
+  sleeping(w) {
+    return shared("hibernate.sleeping")?.[w.id] ?? null;
   }
 
   // Ports listening in this space's checkout, published by the live-ports mod; listed in the hover card.
@@ -770,7 +775,21 @@ export class Spaces {
             .child(status.prs.length ? "· stale" : "PR unavailable"),
         ),
       )
-      .when(Boolean(this.foldedSummary(w, g)), (el) => el.child(this.foldedSummary(w, g)));
+      .when(Boolean(this.foldedSummary(w, g)), (el) => el.child(this.foldedSummary(w, g)))
+      .when(Boolean(this.sleeping(w)), (el) =>
+        el.child(
+          h_flex()
+            .id(`space-asleep-${w.id}`)
+            .flex_none()
+            .gap(3)
+            .items_center()
+            .text_size(TEXT.caption)
+            .text_color(t.muted)
+            .tooltip(`Asleep · ${this.sleeping(w).count} terminal${this.sleeping(w).count === 1 ? "" : "s"} stopped · Wake from the space menu`)
+            .child(Icon("moon", 12))
+            .child("Asleep"),
+        ),
+      );
   }
 
   // ── Agents inside spaces (views/space-agents.js) ─────────────────────────
@@ -855,10 +874,12 @@ export class Spaces {
     const wrap = v_flex()
       .id(`space-wrap-${w.id}`)
       .flex_none()
-      .on_mouse_move((e) => {
+      .on_mouse_move((e, cx) => {
         if (e.bounds) this.rowBounds[w.id] = e.bounds;
+        // Hovered by a scroll, then the pointer moved: the card can come now.
+        if (this.hovering === w.id && !this.hoverToken && !this.card) this.scheduleCard(w, cx);
       })
-      .on_hover((hovered, cx) => this.hoverRow(w, hovered, cx))
+      .on_hover((hovered, cx) => this.hoverRow(w, g, hovered, cx))
       .child(this.withDragging(row, w, i));
     if (!inlineAgents() || this.agentsHidden(w, g) || !this.agents.has(w.id)) return wrap;
     // Agents line up with the space's name: past the avatar, or past a worktree's branch icon.
@@ -869,27 +890,40 @@ export class Spaces {
 
   // ── Hover card: the row's PR, issue and ports (views/card.js) ────────────
 
-  hoverRow(w, hovered, cx) {
-    // Which row shows its hover buttons (a repo's fold, menu and new worktree).
+  // Rows slide under a still pointer while the list scrolls: those hovers open no card and
+  // touch no shared state, so scrolling doesn't redraw the whole window per row passed.
+  hoverRow(w, g, hovered, cx) {
+    const was = this.hovering;
     if (hovered) this.hovering = w.id;
     else if (this.hovering === w.id) this.hovering = null;
-    cx.notify();
+    // Only rows with hover buttons look different when hovered.
+    if (was !== this.hovering && (this.isMain(g) || this.hasAgents(w, g))) cx.notify();
     const h = shared(HOVER_KEY) ?? {};
     if (hovered) {
-      const token = (this.hoverToken = {});
-      if (h.row !== w.id) setShared(HOVER_KEY, { ...h, row: w.id });
-      cx.timer.after(CARD_DELAY_MS, (cx) => {
-        if (this.hoverToken !== token || this.pressed !== null) return;
-        this.openCard(w);
-        this.refreshHovered(w, cx);
-      });
+      if (this.card && h.row !== w.id) setShared(HOVER_KEY, { ...h, row: w.id });
+      if (this.pointerMoving()) this.scheduleCard(w, cx);
       return;
     }
     this.hoverToken = null;
+    if (!this.card) return;
     if (h.row === w.id) setShared(HOVER_KEY, { ...h, row: null });
     cx.timer.after(CARD_CLOSE_MS, () => {
       const now = shared(HOVER_KEY) ?? {};
       if (this.card && !now.card && now.row !== this.card.space) this.closeCard();
+    });
+  }
+
+  pointerMoving() {
+    return Date.now() - (this.pointerAt ?? 0) < 150;
+  }
+
+  // The card for the row the pointer rests on, once it has rested CARD_DELAY_MS.
+  scheduleCard(w, cx) {
+    const token = (this.hoverToken = {});
+    cx.timer.after(CARD_DELAY_MS, (cx) => {
+      if (this.hoverToken !== token || this.pressed !== null || this.hovering !== w.id) return;
+      this.openCard(w);
+      this.refreshHovered(w, cx);
     });
   }
 
@@ -915,6 +949,8 @@ export class Spaces {
     if ((!prs.length && !issue && !ports.length) || !b) return;
     if (this.card?.space === w.id) return;
     this.closeCard();
+    const h = shared(HOVER_KEY) ?? {};
+    if (h.row !== w.id) setShared(HOVER_KEY, { ...h, row: w.id });
     // A window, not a popup: it doesn't take the keyboard from the terminal.
     const id = openOverlay({
       mod: "better-sidebar",
@@ -1169,8 +1205,12 @@ export class Spaces {
           .min_h(0)
           .px(8)
           .pb(14)
+          .id("spaces-list")
           .overflow_y_scrollbar()
           .mode("always")
+          .on_mouse_move(() => {
+            this.pointerAt = Date.now();
+          })
           .on_mouse_up("left", (_e, cx) => {
             this.pressed = null;
             cx.notify();

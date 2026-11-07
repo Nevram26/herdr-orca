@@ -5,7 +5,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec } from "herdr";
+import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec, shared, setShared } from "herdr";
 
 // Where a space is now: its first terminal's live folder, else where it was made.
 function place(s) {
@@ -59,6 +59,8 @@ function items(p, git) {
         ["Rename", "space.rename", { id: tg.id }],
         ...(git ? [["Project settings…", "project-settings", { space: tg.id }]] : []),
         ...(git ? [["New worktree", "worktree", { space: tg.id, action: "new" }], ["Open worktree", "worktree", { space: tg.id, action: "open" }]] : []),
+        // hibernate mod: stop this Mac's space's programs, or start them again.
+        ...(tg.id && !tg.id.includes("/") ? [shared("hibernate.sleeping")?.[tg.id] ? ["Wake space", "hibernate", { action: "wake", space: tg.id }] : ["Sleep space", "hibernate", { action: "sleep", space: tg.id }]] : []),
         // A worktree space closes by removing its worktree (the dialog checks for unsaved work first).
         git === "linked" ? ["Close & remove worktree", "worktree", { space: tg.id, action: "remove" }] : ["Close", "space.close", { id: tg.id }],
       ];
@@ -78,6 +80,7 @@ const closes = (it) => it[0].startsWith("Close");
 
 function menuIcon(it) {
   const command = it[1];
+  if (command === "hibernate") return `mods/hibernate/${it[2].action === "wake" ? "sun" : "moon"}.svg`;
   const name = closes(it) ? "x" : command.endsWith(".rename") ? "square-pen" : command.endsWith(".new") ? "plus" : command === "worktree" ? "git-branch" : command === "app.help" ? "terminal" : command === "app.theme" || command === "project-settings" ? "settings" : command === "pane.split" ? "panel-right" : command === "pane.zoom" ? "square" : "terminal";
   return `mods/workspace-chrome/${name}.svg`;
 }
@@ -115,6 +118,7 @@ export default class Menu extends View {
     else if (it[1] === "worktree" && it[2].action === "remove") openOverlay({ mod: "my-worktree", kind: "dialog", width: 460, height: 300, props: it[2] });
     // New and open use the Create worktree dialog (new-worktree); open starts on its Branch tab.
     else if (it[1] === "worktree") openOverlay({ mod: "new-worktree", kind: "dialog", width: 560, height: 780, props: { space: it[2].space, ...(it[2].action === "open" ? { mode: "branch" } : {}) } });
+    else if (it[1] === "hibernate") setShared("hibernate.request", { nonce: Date.now(), ...it[2] });
     else run(it[1], it[2]);
   }
 

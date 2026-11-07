@@ -1,7 +1,8 @@
 # Orca for Herdr
 
 A Herdr Desktop layout after the Orca app: projects with nested worktrees and their issue/PR
-badges, each one's agents and sub-agents right under it, a hover card per worktree, in-app GitHub issues and pull requests, a Create worktree dialog
+badges, each one's agents and sub-agents right under it, spaces you can put to sleep (and agents
+resumed after a restart), a resource meter, a hover card per worktree, in-app GitHub issues and pull requests, a Create worktree dialog
 (from a branch, an issue, a PR or a new name), Files and Git changes panels, run actions, usage
 limits and live ports.
 

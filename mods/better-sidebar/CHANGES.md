@@ -10,7 +10,8 @@ Modified files:
   a live-ports plug icon on the branch line; the hover card; repo-row hover buttons
   (fold worktrees, menu, new worktree); project groups; the space menu is `my-menu`;
   agents and their sub-agent trees drawn under each space (header "Agents" switch, which
-  hides the Agents panel), the fold chevron hides a space's worktrees and agents together.
+  hides the Agents panel), the fold chevron hides a space's worktrees and agents together;
+  a moon and "Asleep" on a space the hibernate mod put to sleep.
 - `views/ui.js`: exports `RADIUS`.
 - `views/footer.js`: adapted to this layout; "N agents · N need you" while agents show in spaces.
 - `views/agents.js`: exports its helpers (status mark, icon, labels, durations) for the spaces list;
@@ -21,5 +22,5 @@ Modified files:
 - `mod.json`: settings for this layout.
 
 Added files: `views/card.js`, `views/groups.js`, `views/space-agents.js`, `git/project-icons.js`, and icons
-(`bot`, `copy`, `ellipsis`, `external`, `folder`, `folder-plus`, `github`, `issue`, `issue-closed`,
+(`bot`, `moon`, `copy`, `ellipsis`, `external`, `folder`, `folder-plus`, `github`, `issue`, `issue-closed`,
 `panel-bottom`, `plug`). Removed: `mod.schema.json`, `icons/sliders.svg`.

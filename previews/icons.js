@@ -1,5 +1,7 @@
 // Lucide-style icons as an inline sprite: <svg class="i"><use href="#name"/></svg>.
 const ICONS = {
+  activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
   bot: '<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 13v2M15 13v2"/>',
   "git-branch": '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 9v6M18 9a9 9 0 0 1-9 9"/>',
   "pull": '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v6M13 6h3a2 2 0 0 1 2 2v7"/>',
