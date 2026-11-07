@@ -720,7 +720,12 @@ export class Spaces {
   hasDetail(w, g) {
     const status = this.checkoutStatus(w);
     const moved = w.active && (g?.ahead > 0 || g?.behind > 0);
-    return Boolean(this.shownBranch(g) || moved || status?.prs.length || status?.issue || status?.error || this.ports(w).length || this.foldedSummary(w, g));
+    return Boolean(this.shownBranch(g) || moved || status?.prs.length || status?.issue || status?.error || this.ports(w).length || this.foldedSummary(w, g) || this.sleeping(w));
+  }
+
+  // Set by the hibernate mod while a space is asleep: { at, count }.
+  sleeping(w) {
+    return shared("hibernate.sleeping")?.[w.id] ?? null;
   }
 
   // Ports listening in this space's checkout, published by the live-ports mod; listed in the hover card.
@@ -770,7 +775,21 @@ export class Spaces {
             .child(status.prs.length ? "· stale" : "PR unavailable"),
         ),
       )
-      .when(Boolean(this.foldedSummary(w, g)), (el) => el.child(this.foldedSummary(w, g)));
+      .when(Boolean(this.foldedSummary(w, g)), (el) => el.child(this.foldedSummary(w, g)))
+      .when(Boolean(this.sleeping(w)), (el) =>
+        el.child(
+          h_flex()
+            .id(`space-asleep-${w.id}`)
+            .flex_none()
+            .gap(3)
+            .items_center()
+            .text_size(TEXT.caption)
+            .text_color(t.muted)
+            .tooltip(`Asleep · ${this.sleeping(w).count} terminal${this.sleeping(w).count === 1 ? "" : "s"} stopped · Wake from the space menu`)
+            .child(Icon("moon", 12))
+            .child("Asleep"),
+        ),
+      );
   }
 
   // ── Agents inside spaces (views/space-agents.js) ─────────────────────────

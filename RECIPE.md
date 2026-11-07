@@ -1,7 +1,8 @@
 # Orca
 
 A Herdr layout after the Orca desktop app: a left sidebar of projects with their worktrees nested
-under them and each one's agents and sub-agents nested under that, branch/issue/PR badges and a hover card per worktree; tabs as pills with a run button;
+under them and each one's agents and sub-agents nested under that, spaces you can put to sleep and
+wake, branch/issue/PR badges and a hover card per worktree; tabs as pills with a run button;
 framed panes with headers; a hideable right panel with Files and Git changes; and a status bar with
 Claude/Codex usage limits and live ports. GitHub issues and PRs open in-app, and new worktrees come
 from a branch, an issue, a PR or a new name.
@@ -28,6 +29,7 @@ at 12,16 over the sidebar. The root background is `canvas`; terminals have 14×1
   - **Agents** panel (`better-sidebar`, `view: agents`): hidden while agents show in spaces; the
     Agents switch off brings it back. A footer (`view: footer`): Settings, "3 agents · 2 need you"
     while agents show in spaces, the Agents panel toggle, Add machine.
+  - A space put to sleep shows a moon and **Asleep** on its second line.
 - **Tab bar** (42px): `my-tabs` pills for the space's tabs; a **▶ Dev | ▾** run button
   (`t3-actions`, 108px); the right-panel toggle (36px).
 - **Main**: the active tab's panes as cards (radius 10, gap 8, 1px `border`, `accent` when focused,
@@ -36,7 +38,9 @@ at 12,16 over the sidebar. The root background is `canvas`; terminals have 14×1
 - **Right panel** (368px, 280–900, hidden until toggled): a stack of **Files** (`files-open-with`)
   and **Changes** (munza's `better-changes`, installed separately).
 - **Status bar** (28px): Claude Code / Codex usage windows (`usage-limits`, left), commands and the
-  machine (`my-status`), and a **live ports** count button (`live-ports`, 64px).
+  machine (`my-status`), a **resource meter** (`resources`, 150px: activity icon, `CPU 12% · 3.8 GB`)
+  and a **live ports** count button (`live-ports`, 64px).
+- A 0px block runs `hibernate` (draws nothing; its dialogs are overlays).
 - A 0px block runs `desktop-notifications` (draws nothing).
 
 Popups and dialogs: the Issues table (92% × 90%, frameless), the issue/PR viewer (86% × 90%), the
@@ -63,6 +67,26 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   Pull request, Issue and Live ports sections; a row opens the viewer, icons copy the link or open
   GitHub, a port opens in the browser; it closes 250ms after the pointer leaves row and card.
 - **Badges**: click opens the issue/PR viewer; ⌘-click opens GitHub.
+- **Sleep a space** (space menu → **Sleep space**, or **Sleep** in the resource meter): every program
+  in its tabs is recorded (argv, folder, and for Claude its session id from
+  `~/.claude/sessions/<pid>.json`, for Codex from its open rollout file) to
+  `data/hibernate/state.json`, then stopped: agents get an interrupt and `/exit` (`/quit` for Codex),
+  other programs SIGTERM to their process group, SIGKILL last. The shells, panes and tabs stay. A
+  working or blocked agent asks first. **Wake space** types `cd <folder> && <command>` into each idle
+  shell: `claude --resume <id>` (keeping flags like `--model`), `codex resume --no-daemon <id>`, or
+  the original command; a terminal that's gone gets a new shell in the same tab.
+- **After a restart**: every 30s the mod records what each Herdr terminal runs (written only on a
+  change). A reboot or a lost herdr-core brings kept terminals back as shells with a **new** shell
+  pid; those are offered in a dialog (a checkbox each, Resume all, Not now, "Resume automatically next
+  time"). A program you exited keeps its shell pid, so it's never offered.
+- **Settings** (Mod settings → Hibernate, `mod.schema.json`): **Wake sleeping spaces**: only when I
+  choose Wake (default), when I open the space, or when Herdr starts (once per launch). **After a
+  restart**: ask (default), resume automatically, or do nothing.
+- **Resource meter**: one `ps` every 5s (30s while the window isn't in front) sums each local
+  terminal's process tree by space, plus Herdr's own app and core. CPU is a share of all cores:
+  yellow from 30%, red from 60%; memory yellow from 30% of RAM, red from 50%. Click: spaces by
+  memory with CPU, memory and heaviest process, expanding to terminals (click one to go to it), a
+  Herdr row, and Sleep / Wake per space.
 - **Issues** (from the sidebar nav): Issues/PRs tabs, repo picker, filters, assignee/status menus
   (anchored under the control), Start/Open per row. **Start** opens Create worktree with that issue
   or PR picked, or switches to its space if one is open.
@@ -103,7 +127,7 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
 
 ## Built from
 
-`layouts/orca.json` and 21 mods in `mods/`. Shipped mods it uses as-is: `workspace-chrome`, `files`,
+`layouts/orca.json` and 23 mods in `mods/`. Shipped mods it uses as-is: `workspace-chrome`, `files`,
 `changes`, `pane`, `confirm`, `picker`, `machine-add`. Installed separately from munza/herdr-mods:
 `better-changes` (the `changes` slot, `"place": "none"`) and `better-config`.
 
@@ -116,15 +140,20 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   `hooks.js`), `project-settings` (with the same `hooks.js`: keep the two copies identical),
   `files-open-with` (+ `file-icons` for Material icons), `t3-actions`, `sidebar-nav`,
   `automations`, `usage-limits` (`helpers/*.sh`), `live-ports`, `desktop-notifications`,
+  `hibernate` (`core.js` snapshot/stop/start, `ui.js` dialogs, `settings.js` shared with
+  `better-sidebar`), `resources` (`measure.js`),
   `new-project`, `open-vscode`, `excalidraw`.
-- Shared state keys: `live-ports`, `better-sidebar.hover`, `better-sidebar.inline-agents`, `pane-heads`, `issues.pick`,
+- Shared state keys: `live-ports`, `better-sidebar.hover`, `better-sidebar.inline-agents`,
+  `hibernate.sleeping` (`{space: {at, count}}`), `hibernate.request` (`{nonce, action, space}`, how
+  the menu and the meter ask), `hibernate.answer` (the resume dialog's reply), `pane-heads`, `issues.pick`,
   `issues.changed`, `projects.settings` (per `JSON.stringify([machine, main checkout])`: name, icon,
   `base`, `location`, `issue_branch`, `agent`, `setup`, `setupWhen`, `setupWait`),
   `projects.location`, `files-open-with.tabs`,
   `better-changes.*`. Git config: `branch.<b>.herdr-issue` / `herdr-pr` = `owner/repo#N`.
 - Programs: `git`, `gh` (logged in), `curl` (avatars), `osascript`/`pbcopy`/`open` on macOS,
-  `claude` / `codex` CLIs for usage limits, `lsof` for ports, `terminal-notifier` if installed,
-  `code` for VS Code, `herdr-automations`, `hc` and `herdr-app`.
+  `claude` / `codex` CLIs for usage limits and resuming, `lsof` for ports and Codex sessions,
+  `ps` / `sysctl` / `kill` / `pgrep` for the resource meter and sleeping, `terminal-notifier` if
+  installed, `code` for VS Code, `herdr-automations`, `hc` and `herdr-app`.
 
 ## Watch out
 
@@ -144,6 +173,13 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   the card or `setShared` (which redraws every mod in the window): `spaces.js` only treats a hover
   as real when the pointer moved in the last 150ms, writes `better-sidebar.hover` only while a card
   is open, and gives the scroll area a stable `.id("spaces-list")`.
+- Never stop a program with ctrl+c: Herdr starts agents through `zsh -lic '"$@"; exec "$0" -li'`,
+  and SIGINT makes that wrapper abort and close the pane instead of returning to a prompt.
+- "When Herdr starts" compares Herdr.app's process start time with the last one seen, since the
+  mod also restarts on any edit or layout switch. A loss is a terminal alive at the same address
+  with a new shell pid and nothing running; terminals still being recovered are held 15 min.
+- Ticking "Resume automatically next time" writes `after_restart` into `mods/hibernate/mod.json`,
+  which reloads the mod.
 - The hover card is a `window` overlay (doesn't take the keyboard); worktree badges need `gh`.
 - Remote machines: prefill falls back to the clipboard; media and watchers are local-only.
 - `herdr.yaml` / `orca.yaml` are parsed only for `scripts.setup` (one line, or a `|` / `>` block),
@@ -166,3 +202,9 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
 - A worktree with a linked issue and PR shows both badges; hovering shows the card; clicking a badge
   opens the viewer with PR tabs and the merge card.
 - Clicking a Markdown file in Files opens it rendered in a new tab; clicking it again reuses the tab.
+- In a scratch space running `sleep 600`, Sleep space leaves an idle shell with the same pid and
+  the row says Asleep; Wake space runs `sleep 600` again there. With "When I open the space", going
+  to the sleeping space wakes it.
+- `kill -9` a test terminal's shell: herdr-core recovers it with a new pid and the resume dialog
+  lists it; a program exited by hand isn't listed.
+- The status bar shows `CPU n% · n GB`; clicking it lists spaces with Sleep buttons.

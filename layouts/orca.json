@@ -249,6 +249,16 @@
           }
         },
         {
+          "id": "resources",
+          "type": "block",
+          "size": {
+            "px": 150
+          },
+          "content": {
+            "mod": "resources"
+          }
+        },
+        {
           "id": "live-ports",
           "type": "block",
           "content": {
@@ -285,6 +295,16 @@
       },
       "size": {
         "px": 0
+      }
+    },
+    {
+      "id": "hibernate",
+      "type": "block",
+      "size": {
+        "px": 0
+      },
+      "content": {
+        "mod": "hibernate"
       }
     }
   ],
