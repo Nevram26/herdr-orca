@@ -52,7 +52,8 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   one, else opens a peek. An agent's chevron folds its sub-agents (folded: their count, in the most
   urgent one's color). A repo row's chevron folds its worktrees and all their agents together; other
   rows show a chevron on hover that folds their agents. A folded row's second line says "2 agents ·
-  3 sub" with the most urgent status. A sub-agent kept as a pane is listed only under its parent.
+  3 sub" with the most urgent status ("Needs you" in full). An agent whose folded sub-agent needs
+  you shows "Needs you" itself, so folding never hides it. A sub-agent kept as a pane is listed only under its parent.
   While the Agents panel is hidden, `agent.next` / `agent.prev` follow the sidebar's order. The
   footer's orange "N need you" goes to the first agent that needs you. The collapsed rail shows no
   agent rows, only each space's status.

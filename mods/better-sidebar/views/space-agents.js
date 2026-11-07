@@ -121,7 +121,7 @@ export class SpaceAgents {
     if (!count) return null;
     const text = `${count} agent${count === 1 ? "" : "s"}${subs ? ` · ${subs} sub` : ""}`;
     return h_flex().flex_none().gap(5).items_center().text_size(TEXT.caption).text_color(t.muted)
-      .child(text).child(statusMark(t, top, true));
+      .child(text).child(statusMark(t, top));
   }
 
   toggle(addr, cx) {
@@ -163,7 +163,13 @@ export class SpaceAgents {
       .child(div().flex_1().min_w(0).truncate().text_size(12.5).text_color(idle ? t.muted : t.foreground).child(this.name(a)))
       .when(subs.length > 0, (el) => el.child(this.foldButton(a, subs, t)))
       .when(Boolean(when), (el) => el.child(div().flex_none().text_size(TEXT.caption).text_color(t.dim).child(duration(this.now - when))))
-      .child(statusMark(t, a.status));
+      .child(statusMark(t, this.shownStatus(a, subs)));
+  }
+
+  // An agent's own status, or "blocked" when one of its folded sub-agents needs you.
+  shownStatus(a, subs) {
+    const hidden = this.folded.has(a.address) && subs.some((s) => kidStatus(s.t, this.view.status) === "blocked");
+    return hidden ? "blocked" : a.status;
   }
 
   // The sub-agents' chevron; folded, their count in the most urgent one's color.
