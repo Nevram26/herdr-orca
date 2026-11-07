@@ -58,10 +58,14 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   rows show a chevron on hover that folds their agents. A folded row's second line says "2 agents ·
   3 sub" with the most urgent status ("Needs you" in full). An agent whose folded sub-agent needs
   you shows "Needs you" itself, so folding never hides it. A sub-agent kept as a pane is listed only under its parent.
-  While the Agents panel is hidden, `agent.next` / `agent.prev` follow the sidebar's order. The
+  `agent.next` / `agent.prev` follow the spaces list's order, top to bottom, Agents panel or not. The
   footer's orange "N need you" goes to the first agent that needs you. The collapsed rail shows no
   agent rows, only each space's status.
-- **Spaces**: click selects, drag reorders within a machine, right-click opens `my-menu`. Hovering a
+- **Spaces**: click selects, drag reorders within a machine, right-click opens `my-menu`.
+  `cmd-alt-]` / `cmd-alt-[` step through spaces in the list's order (machines, your groups, repos
+  with their worktrees, folded rows included), and the list scrolls to keep the active space on
+  screen, including after `agent.next` or a click. The list scrolls itself (wheel and a draggable
+  thumb) because Herdr can't move a native scroll area from code. Hovering a
   repo row shows **⌄/›** (fold its worktrees, remembered; stays visible while folded), **⋯** (the
   menu) and **+** (Create worktree for that repo). Hovering any row ~450ms opens the **hover card**:
   Pull request, Issue and Live ports sections; a row opens the viewer, icons copy the link or open
@@ -123,7 +127,7 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
 - **Automations**: scheduled agent prompts, through the `herdr-automations` CLI.
 - Keys (merge `keys.json`): `cmd-n` new worktree, `cmd-shift-n` add project, `cmd-g` VS Code,
   `cmd-shift-e` Excalidraw; in this layout `cmd-shift-a` toggles Agents, `cmd-shift-b` the right
-  panel, `cmd-w` / `cmd-shift-w` close a tab / pane. Closing a tab by key asks first ("Close tab
+  panel, `cmd-alt-]` / `cmd-alt-[` next / previous space, `cmd-w` / `cmd-shift-w` close a tab / pane. Closing a tab by key asks first ("Close tab
   …?", Enter confirms); the tab's ×, its menu's Close and a pane's close button don't.
 
 ## Built from

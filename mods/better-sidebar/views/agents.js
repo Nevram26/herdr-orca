@@ -18,7 +18,7 @@ import {
   window,
   layout,
 } from "herdr";
-import { findNode } from "./find-node.js";
+import { findNode, hasSpacesView } from "./find-node.js";
 import { TEXT, Icon, IconButton, GroupHeader, Menu, MenuLabel, MenuOption } from "./ui.js";
 
 // The sidebar's rail goes by its width, not a flag: dragging its edge narrows it too.
@@ -377,7 +377,8 @@ export class Agents {
   render() {
     const t = theme();
     const view = this.readView();
-    setAgentOrder(view.list.map((a) => a.address));
+    // A spaces list in the layout owns agent order (views/spaces.js).
+    if (!hasSpacesView(layout())) setAgentOrder(view.list.map((a) => a.address));
     const rows = view.collapsed
       ? view.list.flatMap((a, i) => this.agentWithSubs(a, i, view, t))
       : view.groups.flatMap((group, index) => this.groupRows(group, index, view, t));
