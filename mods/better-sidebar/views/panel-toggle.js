@@ -4,11 +4,18 @@ import { h_flex } from "gpui-base";
 import { theme, run, props, layout, nextCommand } from "herdr";
 import { findNode } from "./find-node.js";
 import { IconButton } from "./ui.js";
+import { stepSpace } from "./space-nav.js";
 
 export class PanelToggle {
   init(_props, cx) {
     cx.spawn(async () => {
-      for (;;) if ((await nextCommand()) === "toggle-panel") this.toggle();
+      // This copy beside the tab bar stays shown, so it takes the space keys even with the sidebar hidden.
+      for (;;) {
+        const c = await nextCommand();
+        if (c === "toggle-panel") this.toggle();
+        else if (c === "next-space") stepSpace(1);
+        else if (c === "prev-space") stepSpace(-1);
+      }
     });
   }
 

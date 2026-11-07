@@ -27,6 +27,7 @@ import { findNode } from "./find-node.js";
 import { TEXT, Icon, IconButton, Badge } from "./ui.js";
 import { HOVER_KEY, LIVE_KEY } from "./card.js";
 import { SpaceAgents, inlineAgents, setInlineAgents } from "./space-agents.js";
+import { ORDER_KEY } from "./space-nav.js";
 import { readGroups, groupTint, toggleFold, openNameDialog, openProjectPicker, openGroupMenu } from "./groups.js";
 
 const CARD_DELAY_MS = 450;
@@ -108,6 +109,13 @@ export class Spaces {
     this.worktreeCount = {};
     this.worktreeIds = {}; // repo key -> its worktree spaces' ids
     this.agents = new SpaceAgents();
+    // The list scrolls itself so it can follow the active space: Herdr can't move
+    // a native scroll area from code. Heights come from sized().
+    this.offset = 0;
+    this.viewH = 0;
+    this.contentH = 0;
+    this.sizes = {};
+    this.owners = [];
     // Spaces whose agents are folded away (a repo's row folds through reposFolded).
     this.agentsFolded = new Set();
     try {
@@ -149,6 +157,7 @@ export class Spaces {
     for (const s of sp) if (!this.shown.has(s.id)) this.born[s.id] ??= now;
     const ps = panes();
     this.publishParents(sp, ps);
+    this.publishOrder();
     const places = sp.map((s) => {
       const tabs = new Set((s.tabs ?? []).map((tab) => tab.id));
       const folder = spaceFolder(s, ps);
@@ -364,6 +373,78 @@ export class Spaces {
     setShared("better-sidebar.space-parents", parents);
   }
 
+  // Space ids top to bottom as drawn: machines, your groups, repos with their
+  // worktrees. Folded rows keep their spaces in place.
+  navOrder() {
+    const { groups, projects } = readGroups();
+    const units = [];
+    for (const r of this.drawn ?? []) {
+      const ids = this.rowIds(r);
+      if (r.tree && units.length) units[units.length - 1].ids.push(...ids);
+      else units.push({ m: r.w.machine ?? null, key: r.g?.repo ?? null, ids });
+    }
+    const inGroup = (u, id) => u.key && projects[u.key] === id;
+    const byGroup = (us) => [
+      ...groups.flatMap((gr) => us.filter((u) => inGroup(u, gr.id))),
+      ...us.filter((u) => !groups.some((gr) => inGroup(u, gr.id))),
+    ];
+    const remote = [...new Set(units.map((u) => u.m).filter(Boolean))].sort();
+    return [...new Set([null, ...remote].flatMap((m) => byGroup(units.filter((u) => u.m === m))).flatMap((u) => u.ids))];
+  }
+
+  // When the active space changes (keys, agent.next, a click), bring its row on screen.
+  scrollToActive() {
+    const active = spaces().find((w) => w.active)?.id;
+    if (!active || active === this.scrolledTo || !this.viewH) return;
+    const at = this.owners.findIndex((o) => o.ids.includes(active));
+    const h = (key) => this.sizes[key];
+    if (at < 0 || this.owners.slice(0, at + 1).some((o) => h(o.key) == null)) return;
+    let top = this.owners.slice(0, at).reduce((sum, o) => sum + h(o.key), 0);
+    let height = h(this.owners[at].key);
+    // Inside a group block: past its 4px top margin and header, to the row itself.
+    const sub = this.owners[at].sub;
+    const j = sub ? sub.rows.findIndex((r) => r.ids.includes(active)) : -1;
+    if (j >= 0 && [sub.head, ...sub.rows.slice(0, j + 1).map((r) => r.key)].every((k) => h(k) != null)) {
+      top += 4 + h(sub.head) + sub.rows.slice(0, j).reduce((sum, r) => sum + h(r.key), 0);
+      height = h(sub.rows[j].key);
+    }
+    this.scrolledTo = active;
+    const pad = 8;
+    if (top - pad < this.offset) this.offset = top - pad;
+    else if (top + height + pad > this.offset + this.viewH) this.offset = Math.min(top - pad, top + height + pad - this.viewH);
+    this.clampScroll();
+  }
+
+  clampScroll() {
+    this.offset = Math.max(0, Math.min(this.offset, this.contentH - this.viewH));
+  }
+
+  scrollBy(dy, cx) {
+    const before = this.offset;
+    this.offset += dy;
+    this.clampScroll();
+    if (this.offset !== before) cx.notify();
+  }
+
+  // The scrollbar thumb, drawn by hand since the list scrolls itself; drag it to scroll.
+  thumb(t) {
+    const h = Math.max(24, (this.viewH * this.viewH) / this.contentH);
+    const y = ((this.viewH - h) * this.offset) / (this.contentH - this.viewH);
+    return div().id("spaces-thumb").absolute().right(2).top(y).w(6).h(h).rounded(3).bg(t.dim + "66")
+      .on_mouse_down("left", (e) => {
+        this.drag = { y: e.position.y, from: this.offset, k: (this.contentH - this.viewH) / (this.viewH - h) };
+      });
+  }
+
+  // Shares navOrder for better-sidebar.next-space / prev-space (views/space-nav.js).
+  publishOrder() {
+    const order = this.navOrder();
+    const text = JSON.stringify(order);
+    if (!order.length || text === this.orderText) return;
+    this.orderText = text;
+    setShared(ORDER_KEY, order);
+  }
+
   menu(w) {
     // A popup is as tall as its items; height is only the most.
     openOverlay({
@@ -410,9 +491,29 @@ export class Spaces {
   }
 
   // The rows, under a header per machine once one isn't this computer.
+  // A drawn row's spaces: itself, and a folded repo's worktrees.
+  rowIds(r) {
+    return [r.w.id, ...(r.g && !r.tree && this.reposFolded.has(r.g.repo) ? (this.worktreeIds[r.g.repo] ?? []) : [])];
+  }
+
+  // Wraps an element to record its height under `key`.
+  sized(el, key) {
+    return v_flex().id(`sized-${key}`).flex_none().on_size_change((s) => {
+      this.sizes[key] = s.height;
+    }).child(el);
+  }
+
+  // A top-level list child and the spaces it holds; `sub` places rows inside a group block.
+  own(el, ids, sub = null) {
+    const key = `own-${this.owners.length}`;
+    this.owners.push({ key, ids, sub });
+    return this.sized(el, key);
+  }
+
   grouped(t, collapsed) {
     const rows = this.ordered();
-    const draw = (r) => (collapsed ? this.compact(r, t) : this.row(r, t));
+    this.owners = [];
+    const draw = (r) => this.own(collapsed ? this.compact(r, t) : this.row(r, t), this.rowIds(r));
     const drawAll = (rs, first) => (collapsed ? rs.map(draw) : this.groupedRows(rs, t, first));
     const remote = [
       ...new Set([
@@ -422,18 +523,19 @@ export class Spaces {
     ].sort();
     if (!remote.length) {
       return this.machineLoading(null) && !rows.length
-        ? [this.loadingRow(null, t, collapsed)]
+        ? [this.own(this.loadingRow(null, t, collapsed), [])]
         : drawAll(rows, true);
     }
     return [null, ...remote].flatMap((m) => {
-      const head = this.machineHeader(m, t, collapsed);
-      if (this.folded.has(m)) return [head];
       const mine = rows.filter((r) => (r.w.machine ?? null) === m);
+      const folded = this.folded.has(m);
+      const head = this.own(this.machineHeader(m, t, collapsed), folded ? mine.flatMap((r) => this.rowIds(r)) : []);
+      if (folded) return [head];
       if (mine.length) return [head, ...drawAll(mine, m === null)];
       const placeholder = this.machineLoading(m)
         ? this.loadingRow(m, t, collapsed)
         : this.newSpaceRow(m, t, collapsed);
-      return [head, placeholder];
+      return [head, this.own(placeholder, [])];
     });
   }
 
@@ -456,7 +558,8 @@ export class Spaces {
   // show in the first machine section only, so a new group has somewhere to appear.
   groupedRows(rows, t, first) {
     const { groups, projects } = readGroups();
-    if (!groups.length) return rows.map((r) => this.row(r, t));
+    const draw = (r) => this.own(this.row(r, t), this.rowIds(r));
+    if (!groups.length) return rows.map(draw);
     const units = [];
     for (const r of rows) {
       if (r.tree && units.length) units[units.length - 1].rows.push(r);
@@ -468,15 +571,16 @@ export class Spaces {
       if (!mine.length && !first) continue;
       const tint = groupTint(t, group.color);
       // The header and its projects share one block, tinted with the group's color.
-      out.push(v_flex().id(`group-block-${group.id}`).flex_none().mt(4).rounded(9)
+      const sub = group.folded ? null : { head: `ghead-${group.id}`, rows: mine.map((r) => ({ key: `grow-${r.w.id}`, ids: this.rowIds(r) })) };
+      out.push(this.own(v_flex().id(`group-block-${group.id}`).flex_none().mt(4).rounded(9)
         .when(Boolean(tint), (el) => el.bg(tint).pb(group.folded ? 0 : 4))
-        .child(this.groupHeader(group, mine.length, t))
+        .child(this.sized(this.groupHeader(group, mine.length, t), `ghead-${group.id}`))
         .when(!group.folded, (el) => el.child(mine.length
-          ? v_flex().flex_none().pl(16).children(mine.map((r) => this.row(r, t)))
-          : this.emptyGroupRow(group, t))));
+          ? v_flex().flex_none().pl(16).children(mine.map((r) => this.sized(this.row(r, t), `grow-${r.w.id}`)))
+          : this.emptyGroupRow(group, t))), mine.flatMap((r) => this.rowIds(r)), sub));
     }
     const rest = units.filter((u) => !u.key || !groups.some((g) => g.id === projects[u.key]));
-    out.push(...rest.flatMap((u) => u.rows).map((r) => this.row(r, t)));
+    out.push(...rest.flatMap((u) => u.rows).map(draw));
     return out;
   }
 
@@ -1144,10 +1248,9 @@ export class Spaces {
     const collapsed = (this.width ?? findNode(layout(), "sidebar")?.size?.px ?? Infinity) < 160;
     this.agents.refresh();
     const rows = this.grouped(t, collapsed);
-    // With the Agents panel away, agent.next / agent.prev follow this list.
-    const panel = findNode(layout(), "agents");
-    if (inlineAgents() && (!panel || panel.hidden))
-      setAgentOrder(this.agents.order(this.drawn.flatMap((r) => [r.w.id, ...(r.g && this.reposFolded.has(r.g.repo) ? (this.worktreeIds[r.g.repo] ?? []) : [])])));
+    this.scrollToActive();
+    // agent.next / agent.prev follow this list's space order, Agents panel or not.
+    setAgentOrder(this.agents.order(this.navOrder()));
     return v_flex()
       .id("better-sidebar-root")
       .size_full()
@@ -1203,19 +1306,43 @@ export class Spaces {
         v_flex()
           .flex_1()
           .min_h(0)
-          .px(8)
-          .pb(14)
           .id("spaces-list")
-          .overflow_y_scrollbar()
-          .mode("always")
-          .on_mouse_move(() => {
+          .relative()
+          .overflow_hidden()
+          .on_size_change((size, cx) => {
+            if (size.height === this.viewH) return;
+            this.viewH = size.height;
+            this.clampScroll();
+            cx.notify();
+          })
+          .on_scroll_wheel((e, cx) => this.scrollBy(-e.delta.y, cx))
+          .on_mouse_move((e, cx) => {
             this.pointerAt = Date.now();
+            if (this.drag) this.scrollBy(this.drag.from + (e.position.y - this.drag.y) * this.drag.k - this.offset, cx);
           })
           .on_mouse_up("left", (_e, cx) => {
             this.pressed = null;
+            this.drag = null;
             cx.notify();
           })
-          .children(rows),
+          .child(
+            v_flex()
+              .id("spaces-content")
+              .absolute()
+              .left(0)
+              .right(0)
+              .top(-this.offset)
+              .px(8)
+              .pb(14)
+              .on_size_change((size, cx) => {
+                if (size.height === this.contentH) return;
+                this.contentH = size.height;
+                this.clampScroll();
+                cx.notify();
+              })
+              .children(rows),
+          )
+          .when(this.contentH > this.viewH + 1, (el) => el.child(this.thumb(t))),
       );
   }
 }
