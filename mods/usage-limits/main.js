@@ -22,8 +22,10 @@ const REFRESH_COOLDOWN = 30;      // s
 const SESSION_EVERY = 10 * 1000;   // ms, at most this often on hover
 const AGENTS = { "claude-code": "claude", codex: "codex" }; // Herdr's app name → session.sh
 const BAR_W = 30;
-const PANEL_W = 340;
-const PANEL_BAR_W = 110;
+const PANEL_W = 360;
+const PANEL_BAR_W = 96;
+// The percent column fits "100%", or "100% left" when showing what remains.
+const PCT_W = { used: 40, remaining: 66 };
 const SESSION_BAR_W = 60;
 const LEFT_W = 48;                   // the time-left column in the panel
 const PANEL_OPEN_DELAY = 350;       // ms, so passing over the bar doesn't flash it
@@ -234,7 +236,7 @@ export default class UsageLimits extends View {
         .when(r.hint != null, (e) => e.tooltip(r.hint))
         .child(div().flex_1().min_w(0).truncate().text_color(t.muted).child(r.long))
         .child(usageBar(PANEL_BAR_W, r.fill, r.tick, levelColor(r.level, t), t))
-        .child(div().w(36).flex_none().flex().justify_end().whitespace_nowrap().text_color(textColor(r.level, r.percent, t)).child(r.percent))
+        .child(div().w(this.prefs().showRemaining ? PCT_W.remaining : PCT_W.used).flex_none().flex().justify_end().whitespace_nowrap().text_color(textColor(r.level, r.percent, t)).child(r.percent))
         .child(div().w(LEFT_W).flex_none().flex().justify_end().whitespace_nowrap().text_size(11).text_color(t.dim).child(r.left)))
       .when(r.detail !== "", (e) => e.child(div().text_size(11).text_color(t.dim).truncate().child(r.detail)));
   }
