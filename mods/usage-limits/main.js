@@ -40,13 +40,13 @@ function levelColor(level, t) {
 
 const textColor = (level, text, t) => (level === "ok" ? (text === "—" ? t.dim : t.foreground) : levelColor(level, t));
 
-// A limit's number always wears its level, green included; session numbers don't.
+// The bar's limit numbers always wear their level, green included; the panel's only when amber or red.
 const limitColor = (level, text, t) => (text === "—" ? t.dim : levelColor(level, t));
 
 function usageBar(width, fill, tick, color, t) {
-  return div().relative().w(width).h(4).rounded(2).bg(t.border).flex_none()
-    .child(div().absolute().left(0).top(0).h(4).rounded(2).w(Math.round(width * fill)).bg(color))
-    .when(tick != null, (b) => b.child(div().absolute().top(-2).left(Math.round(width * tick)).w(1).h(8).bg(t.foreground).opacity(0.75)));
+  return div().relative().w(width).h(6).rounded(3).bg(t.raised).flex_none()
+    .child(div().absolute().left(0).top(0).h(6).rounded(3).w(Math.round(width * fill)).bg(color))
+    .when(tick != null, (b) => b.child(div().absolute().top(-1).left(Math.round(width * tick)).w(1).h(8).bg(t.foreground).opacity(0.75)));
 }
 
 export default class UsageLimits extends View {
@@ -234,7 +234,7 @@ export default class UsageLimits extends View {
         .when(r.hint != null, (e) => e.tooltip(r.hint))
         .child(div().flex_1().min_w(0).truncate().text_color(t.muted).child(r.long))
         .child(usageBar(PANEL_BAR_W, r.fill, r.tick, levelColor(r.level, t), t))
-        .child(div().w(36).flex_none().flex().justify_end().whitespace_nowrap().text_color(limitColor(r.level, r.percent, t)).child(r.percent))
+        .child(div().w(36).flex_none().flex().justify_end().whitespace_nowrap().text_color(textColor(r.level, r.percent, t)).child(r.percent))
         .child(div().w(LEFT_W).flex_none().flex().justify_end().whitespace_nowrap().text_size(11).text_color(t.dim).child(r.left)))
       .when(r.detail !== "", (e) => e.child(div().text_size(11).text_color(t.dim).truncate().child(r.detail)));
   }
@@ -269,25 +269,21 @@ export default class UsageLimits extends View {
   }
 
   shell(t) {
-    return v_flex().id("ul-panel-body").w(PANEL_W).p(12).gap(10).rounded(8).border(1).border_color(t.border).bg(t.popover).shadow_lg()
-      .text_size(12).text_color(t.foreground)
+    return v_flex().id("ul-panel-body").w(PANEL_W).p(14).gap(14).rounded(10).border(1).border_color(t.border).bg(t.popover).shadow_lg()
+      .text_size(12.5).text_color(t.foreground)
       .on_hover((on, cx) => this.hover(on, cx));
   }
 
   limits(model, t) {
-    const rule = () => div().h(1).bg(t.border).flex_none();
     const body = this.shell(t);
+    model.groups.forEach((g) => body.child(this.cardGroup(g, t)));
     const session = sessionView(this.session?.data, this.session?.title);
-    if (session) body.child(this.sessionBlock(session, t)).child(rule());
-    model.groups.forEach((g, i) => {
-      if (i > 0) body.child(rule());
-      body.child(this.cardGroup(g, t));
-    });
+    if (session) body.child(v_flex().pt(10).border_t(1).border_color(t.border).child(this.sessionBlock(session, t)));
     const cooling = this.cooling();
-    return body.child(rule())
-      .child(h_flex().gap(2).justify_end().items_center()
-        .child(this.iconButton("ul-refresh", "refresh", cooling ? "Refreshing…" : "Refresh now", !cooling, (cx) => this.refresh(cx), t))
-        .child(this.iconButton("ul-settings", "gear", "Settings", true, (cx) => this.show("settings", cx), t)));
+    return body.child(h_flex().gap(2).items_center()
+      .child(div().flex_1().min_w(0).truncate().text_size(10.5).text_color(t.dim).child("Data: claude and codex CLIs, numbers from session logs."))
+      .child(this.iconButton("ul-refresh", "refresh", cooling ? "Refreshing…" : "Refresh now", !cooling, (cx) => this.refresh(cx), t))
+      .child(this.iconButton("ul-settings", "gear", "Settings", true, (cx) => this.show("settings", cx), t)));
   }
 
   // ---------- panel: settings ----------

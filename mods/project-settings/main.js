@@ -3,8 +3,9 @@
 // JSON.stringify([machine, main checkout folder]); better-sidebar and new-worktree read it.
 // Opened as a dialog with props { space } (my-menu's "Project settings…").
 import { View, div, svg } from "gpui-kit";
-import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { theme, props, closeOverlay, spaces, panes, agents, exec, home, shared, setShared, knownAgents, pickFolder, run, notify } from "herdr";
+import { v_flex, h_flex, InputState, Input, TextareaState, Textarea } from "gpui-base";
+import { theme, props, closeOverlay, spaces, panes, agents, exec, home, shared, setShared, knownAgents, pickFolder, run, notify, readTextFile } from "herdr";
+import { yamlScript, HOOK_VARS } from "./hooks.js";
 
 export const KEY = "projects.settings";
 export const projectKey = (machine, main) => JSON.stringify([machine ?? null, main]);
@@ -29,8 +30,13 @@ export default class ProjectSettings extends View {
     const field = (placeholder) => { const s = InputState.new({ placeholder }); s.on("change", (_e, cx) => cx.notify()); return s; };
     this.f = {
       name: field("Follows the folder name"), emoji: field("🚀"), base: field("The repo's default branch"),
-      location: field("~/.herdr/worktrees/<project>"), issue_branch: field("dev/feat/{number}"), setup: field("e.g. pnpm install"),
+      location: field("~/.herdr/worktrees/<project>"), issue_branch: field("dev/feat/{number}"),
     };
+    // The setup script: several lines, run as one shell script.
+    this.f.setup = TextareaState.new({ placeholder: "pnpm i\nln -s $ORCA_ROOT_PATH/.env $ORCA_WORKTREE_PATH/.env" });
+    this.f.setup.set_auto_grow(4, 12);
+    this.f.setup.on("change", (_e, cx) => cx.notify());
+    this.when = "run"; this.wait = false; this.yamlSetup = null;
     this.icon = "auto"; this.color = "ansi6"; this.agent = ""; this.saved = false;
     this.members = null; // the spaces of this project, found after it's read
     this.confirming = false;
@@ -45,6 +51,10 @@ export default class ProjectSettings extends View {
       const s = (shared(KEY) ?? {})[projectKey(this.machine, main)] ?? {};
       for (const k of Object.keys(this.f)) this.f[k].set_value(k === "emoji" ? s.icon?.emoji ?? "" : k === "location" ? tilde(s[k] ?? "") : s[k] ?? "");
       this.icon = s.icon?.kind ?? "auto"; this.color = s.icon?.color ?? "ansi6"; this.agent = s.agent ?? "";
+      this.when = s.setupWhen ?? "run"; this.wait = Boolean(s.setupWait);
+      cx.notify();
+      // The team's script, from orca.yaml in the repo, as Orca reads it.
+      this.yamlSetup = yamlScript(await readTextFile(`${main}/orca.yaml`, { on: this.machine }).catch(() => null));
       cx.notify();
       // Every space on this machine whose checkout belongs to the project: its main one and its worktrees.
       const members = [];
@@ -73,6 +83,8 @@ export default class ProjectSettings extends View {
       ...(v("location") ? { location: expand(v("location")).replace(/\/+$/, "") } : {}),
       ...(v("issue_branch") ? { issue_branch: v("issue_branch") } : {}),
       ...(v("setup") ? { setup: v("setup") } : {}),
+      ...(this.when !== "run" ? { setupWhen: this.when } : {}),
+      ...(this.wait ? { setupWait: true } : {}),
       ...(this.agent ? { agent: this.agent } : {}),
     };
     const all = { ...(shared(KEY) ?? {}) }, key = projectKey(this.machine, this.project.main);
@@ -140,6 +152,41 @@ export default class ProjectSettings extends View {
       .child(div().text_size(11.5).text_color(t.dim).child(this.project.gh ?? tilde(this.project.main))));
   }
 
+  // Worktree Hooks, after Orca's: the setup script, when it runs, and whether the agent waits.
+  hooks(t) {
+    const card = () => v_flex().mt(8).p(14).gap(10).rounded(10).border_1().border_color(t.border).bg(t.background);
+    const toggle = (on, flip) => div().id("ps-wait").w(36).h(20).flex_none().rounded(10).p(2).cursor_pointer().flex()
+      .bg(on ? t.accent : t.hover).when(on, (el) => el.justify_end()).on_click((_e, cx) => { flip(); cx.notify(); })
+      .child(div().w(16).h(16).rounded(8).bg(on ? t.accent_foreground : t.muted));
+    const hasScript = Boolean(this.f.setup.value().trim() || this.yamlSetup);
+    return v_flex()
+      .child(this.section(t, "WORKTREE HOOKS"))
+      .child(div().text_size(12).text_color(t.dim).child("Scripts that run when a worktree is created. Local scripts are stored on this machine; orca.yaml scripts are shared with your team."))
+      .child(card()
+        .child(v_flex().gap(3).child(div().text_size(14).font_semibold().child("Setup script"))
+          .child(div().text_size(12.5).text_color(t.muted).child("Runs after a new worktree is created: install deps, copy env files, run migrations.")))
+        .child(div().text_size(11.5).text_color(t.dim).child("Available environment variables (hover for details):"))
+        .child(h_flex().gap(6).flex_wrap().children(HOOK_VARS.map(([name, about]) => div().id(`ps-var-${name}`).px(8).py(3).rounded(6)
+          .border_1().border_color(t.border).bg(t.raised).text_size(11.5).font_family("JetBrains Mono").text_color(t.muted).tooltip(about).child(`$${name}`))))
+        .when(Boolean(this.yamlSetup), (el) => el.child(v_flex().gap(4)
+          .child(div().text_size(11.5).text_color(t.dim).child("From orca.yaml (shared with your team), runs first:"))
+          .child(div().p(10).rounded(8).bg(t.raised).text_size(12).font_family("JetBrains Mono").text_color(t.muted).child(this.yamlSetup))))
+        .child(div().id("ps-setup").p(10).rounded(8).border_1().border_color(t.input).bg(t.popover).cursor_text()
+          .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+          .child(Textarea.new(this.f.setup).w_full().text_size(12.5).font_family("JetBrains Mono").text_color(t.foreground)))
+        .child(div().text_size(11.5).text_color(t.dim).child("Runs as a single shell script. Saved on this machine.")))
+      .child(card().opacity(hasScript ? 1 : 0.55)
+        .child(h_flex().gap(12).items_center()
+          .child(v_flex().flex_1().gap(3).child(div().text_size(14).font_semibold().child("When to run"))
+            .child(div().text_size(12.5).text_color(t.muted).child("Default when a new worktree is created.")))
+          .child(this.pills(t, "ps-when", [["ask", "Ask every time"], ["run", "Run by default"], ["skip", "Skip by default"]], this.when, (v) => { this.when = v; })))
+        .child(div().h(1).bg(t.border))
+        .child(h_flex().gap(12).items_center()
+          .child(v_flex().flex_1().gap(3).child(div().text_size(13.5).child("Wait for setup to complete before starting agent"))
+            .child(div().text_size(12).text_color(t.dim).child(this.wait ? "Setup runs first, then the agent, in one terminal." : "The agent starts at once; setup runs in a split below it.")))
+          .child(toggle(this.wait, () => { this.wait = !this.wait; }))));
+  }
+
   removal(t) {
     const members = this.members, busy = new Set(agents().filter((a) => a.status === "working" || a.status === "blocked").map((a) => a.space));
     const live = (members ?? []).filter((sp) => busy.has(sp.id));
@@ -186,9 +233,9 @@ export default class ProjectSettings extends View {
             cx.notify();
           })))))
         .child(this.row(t, "Issue branch name", "{number} and {slug} are filled in", this.input(t, "ps-issue", this.f.issue_branch)))
+        .child(this.hooks(t))
         .child(this.section(t, "NEW WORKTREES START WITH"))
-        .child(this.row(t, "Setup command", "Runs in the new worktree first", this.input(t, "ps-setup", this.f.setup)))
-        .child(this.row(t, "Default agent", "Started after setup", this.pills(t, "ps-agent",
+        .child(this.row(t, "Default agent", "Started in each new worktree", this.pills(t, "ps-agent",
           [["", "Last used"], ...this.agents.map((a) => [a.name, a.name])], this.agent, (v) => { this.agent = v; })))
         .child(this.removal(t));
     return v_flex().id("project-settings").size_full().bg(t.popover).text_size(13).text_color(t.foreground)

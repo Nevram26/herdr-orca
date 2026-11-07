@@ -3,8 +3,9 @@
 // Props: { space?, folder?, machine?, mode?, pick?: { kind: "issue" | "pr", number, title?, head? }, task? }.
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar } from "gpui-base";
-import { run, props, closeOverlay, theme, spaces, focused, exec, home, appHome, knownAgents, readTextFile, notify, window, shared } from "herdr";
+import { run, props, closeOverlay, theme, spaces, panes, focused, exec, home, appHome, knownAgents, readTextFile, notify, window, shared } from "herdr";
 import { ROOT, slug, titleSlug, tilde, git, place, repoOf, branches, openPRs, openIssues, prFor, badBranch, parseRef, lookup } from "./git.js";
+import { yamlScript, hookEnv } from "./hooks.js";
 
 const MODES = [
   { id: "branch", label: "Branch", icon: "git-branch", hint: "Filter branches, including ones only on origin" },
@@ -97,6 +98,12 @@ export default class NewWorktree extends View {
     if (this.project !== project) return;
     this.base = this.own().base || this.data.base;
     if (this.own().agent) this.agent = this.own().agent;
+    const yaml = yamlScript(await readTextFile(`${project.main}/orca.yaml`, { on: this.on }).catch(() => null));
+    if (this.project !== project) return;
+    this.setupScript = [yaml, this.own().setup].filter(Boolean).join("\n") || null;
+    // Run by default, skip by default, or ask (no answer yet: Create waits for one).
+    const when = this.own().setupWhen ?? "run";
+    this.runSetup = when === "ask" ? null : when === "run";
     if (this.mode === "new") this.setPick({ kind: "new" });
     cx.notify();
     if (project.gh) {
@@ -260,12 +267,13 @@ export default class NewWorktree extends View {
     if (this.done) return;
     const plan = this.plan();
     if (!plan || plan.error || this.busy) return;
+    if (this.setupScript && this.runSetup == null) { this.error = "Choose whether to run the setup script."; return cx.notify(); }
     this.busy = true;
     this.error = "";
     cx.notify();
     cx.spawn(async (cx) => {
       try {
-        await this.create(plan);
+        await this.create(plan, cx);
         this.close();
       } catch (e) {
         this.error = String(e?.message ?? e);
@@ -276,7 +284,7 @@ export default class NewWorktree extends View {
     });
   }
 
-  async create(plan) {
+  async create(plan, cx) {
     const r = this.project, on = this.on, pick = this.pick, branch = this.branch.value().trim();
     const g = async (args) => {
       const res = await git(r.main, args, on);
@@ -300,12 +308,12 @@ export default class NewWorktree extends View {
     const link = (key, n) => r.gh && git(r.main, ["config", `branch.${branch}.${key}`, `${r.gh}#${n}`], on);
     if (pick.kind === "issue") { await link("herdr-issue", pick.number); if (pick.pr && branch === pick.pr.headRefName) await link("herdr-pr", pick.pr.number); }
     if (pick.kind === "pr" && branch === pick.head) await link("herdr-pr", pick.number);
-    await this.open(path);
+    await this.open(path, cx);
   }
 
   // An open space on the checkout is selected (and renamed if a name was typed);
   // otherwise a new one starts there, with the agent and, for an issue or PR, its task.
-  async open(path) {
+  async open(path, cx) {
     if (this.done) return;
     this.done = true;
     localStorage.setItem("agent", this.agent ?? "");
@@ -320,13 +328,28 @@ export default class NewWorktree extends View {
     const agent = this.agents.find((a) => a.name === this.agent);
     const task = this.task(agent);
     if (task) await this.prefill(task);
-    // The project's setup command runs first, in the same terminal, then the agent (or a shell).
-    const setup = this.own().setup;
-    const failed = `|| echo "Setup failed (exit $?)"`;
-    const argv = !setup ? agent?.run
-      : agent ? ["sh", "-c", `${setup} ${failed}; exec "$@"`, "sh", ...agent.run]
-      : ["sh", "-c", `${setup} ${failed}; exec "\${SHELL:-zsh}" -l`];
-    run("space.new", { folder: path, ...(this.on ? { machine: this.on } : {}), ...(name ? { name } : {}), ...(argv ? { argv } : {}) });
+    // The setup script (Worktree Hooks in project settings) runs with Orca's variables. Waiting:
+    // first, then the agent, in one terminal. Not waiting: the agent starts, setup in a split below.
+    const script = this.setupScript && this.runSetup ? this.setupScript : null;
+    const env = ["env", ...hookEnv(this.project.main, path)];
+    const report = 'status=$?\n[ "$status" -eq 0 ] && echo "Setup finished." || echo "Setup failed (exit $status)."';
+    const shell = ["sh", "-c", 'exec "${SHELL:-zsh}" -l'];
+    const where = { folder: path, ...(this.on ? { machine: this.on } : {}), ...(name ? { name } : {}) };
+    if (!script) return run("space.new", { ...where, ...(agent ? { argv: agent.run } : {}) });
+    if (this.own().setupWait || !agent) {
+      run("space.new", { ...where, argv: [...env, "sh", "-c", `${script}\n${report}\nexec "$@"`, "sh", ...(agent ? agent.run : shell)] });
+      return;
+    }
+    run("space.new", { ...where, argv: agent.run });
+    // The new space shows up a moment later: split its first pane for the setup terminal.
+    for (let i = 0; i < 30; i++) {
+      const s = spaces().find((x) => (x.machine ?? null) === (this.on ?? null) && x.folder === path);
+      const tabs = new Set((s?.tabs ?? []).map((c) => c.id));
+      const pane = s && panes().find((p) => tabs.has(p.tab) && p.terminal);
+      if (pane) return run("pane.split", { direction: "down", pane: pane.pane, argv: [...env, "sh", "-c", `${script}\n${report}\nexec "\${SHELL:-zsh}" -l`] });
+      await cx.sleep(200);
+    }
+    notify({ title: "Setup script didn't start", body: "The new space didn't appear in time; run it there yourself.", level: "warning" });
   }
 
   task(agent) {
@@ -430,7 +453,16 @@ export default class NewWorktree extends View {
         .when(this.menu === "agent", (el) => el.child(this.options(t, "nw-agents", [
           ["none", icon("terminal", 14).text_color(t.muted), "None · just a terminal", !agent, (cx) => { this.agent = ""; this.menu = null; cx.notify(); }],
           ...this.agents.map((a) => [a.name, this.agentIcon(a, t), a.name, a === agent, (cx) => { this.agent = a.name; this.menu = null; cx.notify(); }]),
-        ]))));
+        ]))))
+      .when(Boolean(this.setupScript), (el) => el.child(v_flex().gap(6)
+        .child(this.label(t, "Setup script", this.runSetup == null ? "[Choose]" : ""))
+        .child(h_flex().gap(6).items_center()
+          .children([[true, "Run"], [false, "Skip"]].map(([v, text]) => div().id(`nw-setup-${text}`).h(28).px(12).flex().items_center()
+            .rounded(7).text_size(12.5).cursor_pointer().border_1().border_color(this.runSetup === v ? t.accent : t.border)
+            .bg(this.runSetup === v ? t.selected : t.background).text_color(this.runSetup === v ? t.foreground : t.muted)
+            .hover((st) => st.bg(t.hover)).on_click((_e, cx) => { this.runSetup = v; this.error = ""; cx.notify(); }).child(text)))
+          .child(div().flex_1().min_w(0).truncate().text_size(11.5).text_color(t.dim).font_family("JetBrains Mono")
+            .child(this.setupScript.split("\n").filter(Boolean).join(" · "))))));
   }
 
   render(cx) {
