@@ -79,9 +79,10 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   change). A reboot or a lost herdr-core brings kept terminals back as shells with a **new** shell
   pid; those are offered in a dialog (a checkbox each, Resume all, Not now, "Resume automatically next
   time"). A program you exited keeps its shell pid, so it's never offered.
-- **Settings** (Mod settings → Hibernate, `mod.schema.json`): **Wake sleeping spaces**: only when I
-  choose Wake (default), when I open the space, or when Herdr starts (once per launch). **After a
-  restart**: ask (default), resume automatically, or do nothing.
+- **Settings** (Mod settings → Hibernate, `mod.schema.json`), short labels so the choice buttons
+  leave the description room: **Wake sleeping spaces**: Manual (default: the space menu or the
+  meter), On open (going to the space), On start (once per Herdr launch). **After a restart**: Ask
+  (default), Automatic, Off.
 - **Resource meter**: one `ps` every 5s (30s while the window isn't in front) sums each local
   terminal's process tree by space, plus Herdr's own app and core. CPU is a share of all cores:
   yellow from 30%, red from 60%; memory yellow from 30% of RAM, red from 50%. Click: spaces by
