@@ -122,7 +122,8 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   machine), **When to run** (Ask every time / Run by default / Skip by default) and **Wait for setup
   to complete before starting agent**; and Remove project.
 - **Files**: clicking a file opens it in its own tab (Markdown rendered with a Source toggle), reusing
-  the tab already showing it; right-click opens it in your apps.
+  the tab already showing it; right-click opens it in your apps. Git-ignored files and folders (and
+  everything under an ignored folder) are greyed out; symlinks show a link icon after their name.
 - **Changes**: staging, commit/amend, history, diffs in one centre tab (Better Changes' own docs).
 - **Automations**: scheduled agent prompts, through the `herdr-automations` CLI.
 - Keys (merge `keys.json`): `cmd-n` new worktree, `cmd-shift-n` add project, `cmd-g` VS Code,
