@@ -11,6 +11,8 @@ Modified files:
   (fold worktrees, menu, new worktree); project groups; the space menu is `my-menu`.
 - `views/ui.js`: exports `RADIUS`.
 - `views/footer.js`: adapted to this layout.
+- `views/agents.js`: a sub-agent kept as a pane shows only nested under its parent (not also
+  as its own row), and clicking it focuses its pane instead of peeking.
 - `git/pr-status.js`: finds each checkout's issue (git-config link, PR closing references,
   "Closes #N", or a branch number checked against GitHub) and carries it with the PRs.
 - `mod.json`: settings for this layout.
