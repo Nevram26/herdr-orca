@@ -11,7 +11,8 @@ Modified files:
   (fold worktrees, menu, new worktree); project groups; the space menu is `my-menu`;
   agents and their sub-agent trees drawn under each space (header "Agents" switch, which
   hides the Agents panel), the fold chevron hides a space's worktrees and agents together;
-  a moon and "Asleep" on a space the hibernate mod put to sleep.
+  a moon and "Asleep" on a space the hibernate mod put to sleep; every + (Spaces, a machine's
+  header, "New space there") starts the space in its machine's home, not the focused folder.
   It shares its drawn space order, and `agent.next` / `agent.prev` follow that order.
   The list scrolls itself (wheel, a draggable thumb) so it can follow the active space's row.
 - `views/panel-toggle.js`: also takes `next-space` / `prev-space`, stepping through spaces in the list's order.

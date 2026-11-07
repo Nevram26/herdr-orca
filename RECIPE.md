@@ -70,6 +70,11 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   menu) and **+** (Create worktree for that repo). Hovering any row ~450ms opens the **hover card**:
   Pull request, Issue and Live ports sections; a row opens the viewer, icons copy the link or open
   GitHub, a port opens in the browser; it closes 250ms after the pointer leaves row and card.
+  Every **+** for a new space (the Spaces header, a machine's header, "New space there", and
+  "New space" in the menu) starts it in that machine's home folder.
+- **Close & remove worktree** (space menu, or closing a worktree space's last tab): when another
+  open space on the same machine is in that checkout, the dialog turns into **Close space**: the
+  folder shows Kept, it names the other space, and only this space closes.
 - **Badges**: click opens the issue/PR viewer; ⌘-click opens GitHub.
 - **Sleep a space** (space menu → **Sleep space**, or **Sleep** in the resource meter): every program
   in its tabs is recorded (argv, folder, and for Claude its session id from
@@ -122,9 +127,11 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   machine), **When to run** (Ask every time / Run by default / Skip by default) and **Wait for setup
   to complete before starting agent**; and Remove project.
 - **Files**: clicking a file opens it in its own tab (Markdown rendered with a Source toggle), reusing
-  the tab already showing it; right-click opens it in your apps. Code is colored by the **Code
-  colors** setting (Mod settings): Editor (default; a soft palette for light and dark), Terminal
-  (the theme's ANSI colors) or Off. `.env`, `.env.*`, `*.env` and `.envrc` highlight as shell.
+  the tab already showing it; right-click opens it in your apps. Git-ignored files and folders (and
+  everything under an ignored folder) are greyed out; symlinks show a link icon after their name.
+  Code is colored by the **Code colors** setting (Mod settings): Editor (default; a soft palette for
+  light and dark), Terminal (the theme's ANSI colors) or Off. `.env`, `.env.*`, `*.env` and `.envrc`
+  highlight as shell.
 - **Changes**: staging, commit/amend, history, diffs in one centre tab (Better Changes' own docs).
 - **Automations**: scheduled agent prompts, through the `herdr-automations` CLI.
 - Keys (merge `keys.json`): `cmd-n` new worktree, `cmd-shift-n` add project, `cmd-g` VS Code,
@@ -180,6 +187,10 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   the card or `setShared` (which redraws every mod in the window): `spaces.js` only treats a hover
   as real when the pointer moved in the last 150ms, writes `better-sidebar.hover` only while a card
   is open, and gives the scroll area a stable `.id("spaces-list")`.
+- `space.new` without a folder starts where the focused terminal is. From a worktree, that opens a
+  second space on the same worktree, and removing either one deletes the folder under both: always
+  pass the machine and its home (a remote's comes from `printenv HOME` there, cached), and check
+  for other spaces on the checkout before `git worktree remove`.
 - Never stop a program with ctrl+c: Herdr starts agents through `zsh -lic '"$@"; exec "$0" -li'`,
   and SIGINT makes that wrapper abort and close the pane instead of returning to a prompt.
 - "When Herdr starts" compares Herdr.app's process start time with the last one seen, since the

@@ -18,6 +18,9 @@ import {
   layout,
   nextCommand,
   setAgentOrder,
+  home,
+  exec,
+  focused,
 } from "herdr";
 import { PRStatusObserver, prPlaceKey, prAppearance } from "../git/pr-status.js";
 import { spaceFolder, checkoutKey, readCheckout } from "../git/checkouts.js";
@@ -93,6 +96,7 @@ export class Spaces {
     this.over = null;
     this.machines = [];
     this.iconAt = {}; // repo key -> last icon lookup
+    this.remoteHome = {}; // machine -> its home folder, for new spaces
     this.repoIcons = {};
     try {
       this.repoIcons = JSON.parse(localStorage.getItem("repo.icons") ?? "{}");
@@ -264,6 +268,11 @@ export class Spaces {
         const r = await hc(["machine", "ls", "--json"]);
         if (r.code === 0)
           this.machines = (JSON.parse(r.stdout).machines ?? []).filter((m) => !m.temporary);
+        for (const m of this.machines) {
+          if (m.state !== "connected" || this.remoteHome[m.name]) continue;
+          const h = await exec("printenv", ["HOME"], { on: m.name }).catch(() => null);
+          if (h?.code === 0 && h.stdout.trim()) this.remoteHome[m.name] = h.stdout.trim();
+        }
       } catch {
         // Keep the last machine list if core is temporarily unavailable.
       }
@@ -624,6 +633,13 @@ export class Spaces {
       .child("Add projects…");
   }
 
+  // A new space starts at its machine's home, never in the focused terminal's folder:
+  // from a worktree that would open a second space on it, and removing either deletes both.
+  newSpace(m) {
+    const folder = m ? this.remoteHome[m] : home();
+    run("space.new", { machine: m ?? "", ...(folder ? { folder } : {}) });
+  }
+
   machineLoading(m) {
     const layout = machines().find((k) => k.name === m)?.layout;
     return (
@@ -656,7 +672,7 @@ export class Spaces {
       .text_size(TEXT.small)
       .text_color(t.dim)
       .hover((s) => s.bg(t.hover).text_color(t.foreground))
-      .on_click(() => run("space.new", m ? { machine: m } : {}))
+      .on_click(() => this.newSpace(m))
       .child(Icon("plus", 12))
       .when(!collapsed, (el) => el.child("New space there"));
   }
@@ -716,7 +732,7 @@ export class Spaces {
       .hover((s) => s.bg(t.hover).text_color(t.foreground))
       .on_click((_e, cx) => {
         cx.stop_propagation();
-        run("space.new", m ? { machine: m } : {});
+        this.newSpace(m);
       })
       .child("+");
   }
@@ -1297,7 +1313,7 @@ export class Spaces {
                   label: "New space",
                   iconSize: 14,
                   muted: true,
-                  onClick: () => run("space.new"),
+                  onClick: () => this.newSpace(spaces().find((s) => s.id === focused()?.space)?.machine ?? null),
                 }),
               ),
           ),
