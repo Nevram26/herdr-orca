@@ -5,13 +5,19 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec, shared, setShared } from "herdr";
+import { home, focused as focusedNow, run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec, shared, setShared } from "herdr";
 
 // Where a space is now: its first terminal's live folder, else where it was made.
 function place(s) {
   const tabs = new Set((s.tabs ?? []).map((c) => c.id));
   return panes().find((p) => tabs.has(p.tab) && p.cwd)?.cwd || s.folder;
 }
+
+// This Mac: its home; another machine: space.new starts in that machine's home by itself.
+const newSpaceArgs = () => {
+  const m = spaces().find((x) => x.id === focusedNow()?.space)?.machine ?? null;
+  return m ? { machine: m } : { machine: "", folder: home() };
+};
 
 // A space's checkout: "main" (a repo's own), "linked" (a worktree), or null.
 async function checkout(folder, on) {
@@ -66,7 +72,8 @@ function items(p, git) {
       ];
     default:
       return [
-        ["New space", "space.new", {}],
+        // At home, not in the focused (maybe worktree) folder: a second space there shares its removal.
+        ["New space", "space.new", newSpaceArgs()],
         ["Keybinds", "app.help", {}],
         ["Theme: graphite", "app.theme", { name: "graphite" }],
         ["Theme: ink", "app.theme", { name: "ink" }],

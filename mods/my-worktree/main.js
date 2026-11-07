@@ -207,8 +207,20 @@ export default class Worktree extends View {
     else run("space.new", { folder: c.path, machine: this.on });
   }
 
+  // Other open spaces on this checkout (same machine): then only this space closes.
+  sharers() {
+    const s = this.space(), top = this.repo?.top;
+    if (!s || !top) return [];
+    const inside = (p, dir) => p === dir || p.startsWith(dir + "/");
+    return spaces().filter((x) => x.id !== s.id && (x.machine ?? null) === (s.machine ?? null) && inside((place(x) ?? "").replace(/\\/g, "/"), top));
+  }
+
   async remove() {
     const s = this.space();
+    if (this.sharers().length) {
+      run("space.close", { id: s.id, confirmed: true });
+      return "";
+    }
     const status = await git(this.repo.top, ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain"], this.on);
     if (!status.ok) return status.err || "git status failed.";
     // git refuses a worktree with submodules unless forced, because their
@@ -308,7 +320,8 @@ export default class Worktree extends View {
   // The remove confirm: what goes, what stays, what would be lost, and real buttons.
   renderRemove(t) {
     const s = this.space(), r = this.repo;
-    const lose = this.dirty || this.unpushed.length > 0;
+    const shared = r?.linked ? this.sharers() : [];
+    const lose = !shared.length && (this.dirty || this.unpushed.length > 0);
     const ready = Boolean(r && r.linked) && !this.busy;
     const icon = (path, size, color) => svg(path).size(size).flex_none().text_color(color);
     const pill = (text, color) => div().flex_none().h(20).px(8).flex().items_center().rounded(10)
@@ -337,11 +350,13 @@ export default class Worktree extends View {
           ? div().text_size(12.5).text_color(t.muted).child("This is the repository's main checkout, not a worktree, so there is nothing to remove.")
           : v_flex().gap(10)
             .child(v_flex().rounded(10).border_1().border_color(t.border).bg(t.background)
-              .child(line("mods/workspace-chrome/folder.svg", "Folder", r.top.split("/").pop(), pill("Deleted", t.blocked), tilde(r.top.slice(0, r.top.lastIndexOf("/") + 1), this.userHome)))
+              .child(line("mods/workspace-chrome/folder.svg", "Folder", r.top.split("/").pop(), shared.length ? pill("Kept", t.done) : pill("Deleted", t.blocked), tilde(r.top.slice(0, r.top.lastIndexOf("/") + 1), this.userHome)))
               .child(div().h(1).bg(t.border))
               .child(line("mods/workspace-chrome/git-branch.svg", "Branch", this.branch || "detached", pill("Kept", t.done))))
-            .when(this.dirty, (el) => el.child(warn("Uncommitted changes in this worktree will be lost.")))
-            .when(this.unpushed.length > 0, (el) => el.child(warn(`Submodule ${this.unpushed.join(", ")} has commits that aren't pushed anywhere: they will be lost.`)));
+            .when(shared.length > 0, (el) => el.child(div().text_size(12.5).text_color(t.muted)
+              .child(`${shared.map((x) => x.name).join(", ")} also ${shared.length === 1 ? "uses" : "use"} this worktree, so it stays. Only this space closes.`)))
+            .when(!shared.length && this.dirty, (el) => el.child(warn("Uncommitted changes in this worktree will be lost.")))
+            .when(!shared.length && this.unpushed.length > 0, (el) => el.child(warn(`Submodule ${this.unpushed.join(", ")} has commits that aren't pushed anywhere: they will be lost.`)));
     return v_flex()
       .id("worktree")
       .track_focus(this.handle)
@@ -355,15 +370,15 @@ export default class Worktree extends View {
         .child(div().size(40).flex_none().flex().items_center().justify_center().rounded(10).bg(t.blocked + "22")
           .child(icon("mods/my-worktree/trash.svg", 18, t.blocked)))
         .child(v_flex().flex_1().min_w(0).gap(2)
-          .child(div().text_size(15).font_semibold().text_color(t.foreground).child("Remove worktree"))
+          .child(div().text_size(15).font_semibold().text_color(t.foreground).child(shared.length ? "Close space" : "Remove worktree"))
           .child(div().truncate().text_size(12).text_color(t.muted).child([s?.name, r?.name].filter(Boolean).join(" · ")))))
       .child(body)
       .when(Boolean(this.error), (el) => el.child(div().text_size(12.5).text_color(t.blocked).child(this.error)))
       .child(div().flex_1())
       .child(h_flex().gap(8).items_center()
-        .child(div().flex_1().text_size(11.5).text_color(t.dim).child(r?.linked ? "Its space closes too." : ""))
+        .child(div().flex_1().text_size(11.5).text_color(t.dim).child(r?.linked && !shared.length ? "Its space closes too." : ""))
         .child(button("wt-cancel", "Cancel", "esc", false, () => this.close()))
-        .when(Boolean(r?.linked), (el) => el.child(button("wt-remove", this.busy ? "Removing…" : lose ? "Remove anyway" : "Remove", "↵", true, (cx) => this.go(cx), ready))));
+        .when(Boolean(r?.linked), (el) => el.child(button("wt-remove", shared.length ? "Close space" : this.busy ? "Removing…" : lose ? "Remove anyway" : "Remove", "↵", !shared.length, (cx) => this.go(cx), ready))));
   }
 
   render(cx) {
