@@ -6,7 +6,9 @@ badges, a hover card per worktree, in-app GitHub issues and pull requests, a Cre
 limits and live ports.
 
 See [RECIPE.md](RECIPE.md) for what it does and how it's built, and
-[THIRD_PARTY.md](THIRD_PARTY.md) for credits and licenses.
+[THIRD_PARTY.md](THIRD_PARTY.md) for credits and licenses. The issues, live ports, usage limits and
+actions mods are also published on their own in
+[VladTemp27/herdr-mods](https://github.com/VladTemp27/herdr-mods).
 
 ## Install
 
