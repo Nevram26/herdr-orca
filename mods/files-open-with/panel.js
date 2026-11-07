@@ -4,6 +4,7 @@ import { div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, Editor, EditorState } from "gpui-base";
 import { spaces, panes, focused, exec, readTextFile, watchFolder, theme, settings, window, openOverlay } from "herdr";
 import { openFile } from "./tabs.js";
+import { syntaxColors, languageFor } from "./syntax.js";
 import { available, menuHeight } from "./items.js";
 import ICONS from "./icons.js";
 
@@ -14,7 +15,6 @@ function location() {
   return { cwd: pane?.cwd || f?.cwd || space?.folder, on, space: space?.id };
 }
 const key = () => JSON.stringify(location());
-const LANG = { ts: "js", tsx: "js", mts: "js", cts: "js", jsx: "js", mjs: "js", toml: "yaml", jsonc: "json", svelte: "html", vue: "html" };
 const PER_FOLDER = 500, TOTAL = 5000;
 
 // Material icons: icons.js is a copy of file-icons' table; the SVGs stay in that mod.
@@ -151,11 +151,12 @@ export default class Panel {
         if (this.file !== path || !this.current(context)) return;
         if (text === null) { this.fileError = "This file is no longer available"; return; }
         if (text.includes("\0")) { this.fileError = "Binary file · no text preview"; return; }
-        const t = theme(), ext = path.includes(".") ? path.split(".").pop() : "txt";
-        this.code = EditorState.new({ language: LANG[ext] ?? ext, readonly: true,
+        const syntax = await syntaxColors();
+        if (this.file !== path || !this.current(context)) return;
+        this.code = EditorState.new({ language: languageFor(path), readonly: true,
           value: text.length > 400000 ? text.slice(0, 400000) + "\n… (file truncated)" : text,
           font_family: settings().font_family, font_size: 12,
-          syntax: { keyword: t.ansi5, string: t.ansi2, comment: t.dim, function: t.ansi4, type: t.ansi3, number: t.ansi1, constant: t.ansi6 } });
+          syntax });
       } catch { if (this.file === path && this.current(context)) this.fileError = "Cannot preview this file (binary, too large, or unreadable)"; }
       finally { cx.notify(); }
     });

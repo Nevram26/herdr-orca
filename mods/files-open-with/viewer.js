@@ -4,8 +4,8 @@ import { div } from "gpui-kit";
 import { v_flex, h_flex, Editor, EditorState, TextView } from "gpui-base";
 import { props, readTextFile, watchFolder, theme, settings, focused, spaces } from "herdr";
 import { openFile } from "./tabs.js";
+import { syntaxColors, languageFor } from "./syntax.js";
 
-const LANG = { ts: "js", tsx: "js", mts: "js", cts: "js", jsx: "js", mjs: "js", toml: "yaml", jsonc: "json", svelte: "html", vue: "html", md: "markdown", mdx: "markdown" };
 const LIMIT = 400000;
 const isMarkdown = path => /\.(md|markdown|mdx)$/i.test(path ?? "");
 const dirname = path => path.slice(0, path.lastIndexOf("/")) || "/";
@@ -44,12 +44,13 @@ export default class Viewer {
         if (raw.includes("\0")) { this.error = "Binary file · no text preview"; return; }
         const text = raw.length > LIMIT ? raw.slice(0, LIMIT) + "\n… (file truncated)" : raw;
         if (this.code && text === this.text) return;
-        const t = theme(), ext = file.includes(".") ? file.split(".").pop().toLowerCase() : "txt";
+        const syntax = await syntaxColors();
+        if (this.closed || this.file !== file) return;
         this.code?.release();
         this.text = text; this.error = null;
-        this.code = EditorState.new({ language: LANG[ext] ?? ext, readonly: true, value: text,
+        this.code = EditorState.new({ language: languageFor(file), readonly: true, value: text,
           font_family: settings().font_family, font_size: 12,
-          syntax: { keyword: t.ansi5, string: t.ansi2, comment: t.dim, function: t.ansi4, type: t.ansi3, number: t.ansi1, constant: t.ansi6 } });
+          syntax });
       } catch { if (this.file === file) this.error = "Cannot preview this file (binary, too large, or unreadable)"; }
       finally { if (!this.closed) cx.notify(); }
     });
