@@ -61,7 +61,20 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   out, track origin, or a new branch from a named start). Issues use `dev/feat/{number}` (setting
   `issue_branch` in `mods/new-worktree/mod.json`) or the branch of the open PR that closes them.
   With Claude chosen, an issue/PR task is pasted into Claude's prompt but not sent. One create per
-  dialog.
+  dialog. When the project has a setup script, a **Setup script** row offers **Run** / **Skip**.
+- **Worktree setup hooks** (Orca-compatible): a new worktree runs the repo's `orca.yaml`
+  `scripts.setup` (shared with the team, first) and then the project's local setup script, with
+  `ORCA_ROOT_PATH`, `ORCA_WORKTREE_PATH`, `ORCA_WORKSPACE_NAME` (plus `CONDUCTOR_ROOT_PATH`,
+  `HERDR_ROOT_PATH`, `HERDR_WORKTREE_PATH`). Run by default, skip by default, or ask every time.
+  "Wait for setup" runs it first and then the agent in one terminal; otherwise the agent starts at
+  once and setup runs in a split below it. It reports "Setup finished." or "Setup failed (exit N)."
+- **Project settings** (space menu → Project settings…): display name and icon (Automatic, Emoji or
+  Letter, with a colour);
+  **Worktrees**: default base branch, worktree location (instead of `~/.herdr/worktrees/<repo>`),
+  issue branch name (`{number}`, `{slug}`), default agent; **Worktree hooks**: the variables (hover
+  for what each holds), the `orca.yaml` script read-only, the local setup script (saved on this
+  machine), **When to run** (Ask every time / Run by default / Skip by default) and **Wait for setup
+  to complete before starting agent**; and Remove project.
 - **Files**: clicking a file opens it in its own tab (Markdown rendered with a Source toggle), reusing
   the tab already showing it; right-click opens it in your apps.
 - **Changes**: staging, commit/amend, history, diffs in one centre tab (Better Changes' own docs).
@@ -80,12 +93,15 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   `footer`, `panel-toggle`, `card`, `groups`), `my-tabs`, `my-pane`, `my-status`, `my-menu`
   (terminal and space menus; `terminal_menu: "my-menu"`), `my-new-menu`, `my-worktree` (remove
   confirm): modified clones of Herdr's mods.
-- `issues` (table, viewer, `pr.js`, `start.js`, `prefill.sh`), `new-worktree` (dialog, `git.js`),
+- `issues` (table, viewer, `pr.js`, `start.js`, `prefill.sh`), `new-worktree` (dialog, `git.js`,
+  `hooks.js`), `project-settings` (with the same `hooks.js`: keep the two copies identical),
   `files-open-with` (+ `file-icons` for Material icons), `t3-actions`, `sidebar-nav`,
   `automations`, `usage-limits` (`helpers/*.sh`), `live-ports`, `desktop-notifications`,
-  `new-project`, `project-settings`, `open-vscode`, `excalidraw`.
+  `new-project`, `open-vscode`, `excalidraw`.
 - Shared state keys: `live-ports`, `better-sidebar.hover`, `pane-heads`, `issues.pick`,
-  `issues.changed`, `projects.settings`, `projects.location`, `files-open-with.tabs`,
+  `issues.changed`, `projects.settings` (per `JSON.stringify([machine, main checkout])`: name, icon,
+  `base`, `location`, `issue_branch`, `agent`, `setup`, `setupWhen`, `setupWait`),
+  `projects.location`, `files-open-with.tabs`,
   `better-changes.*`. Git config: `branch.<b>.herdr-issue` / `herdr-pr` = `owner/repo#N`.
 - Programs: `git`, `gh` (logged in), `curl` (avatars), `osascript`/`pbcopy`/`open` on macOS,
   `claude` / `codex` CLIs for usage limits, `lsof` for ports, `terminal-notifier` if installed,
@@ -104,6 +120,8 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   and the branch name.
 - The hover card is a `window` overlay (doesn't take the keyboard); worktree badges need `gh`.
 - Remote machines: prefill falls back to the clipboard; media and watchers are local-only.
+- `orca.yaml` is parsed only for `scripts.setup` (one line, or a `|` / `>` block), not as full YAML.
+  The setup script also runs when Create opens an existing checkout that has no space open yet.
 
 ## Done when
 
@@ -112,6 +130,9 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
 - A repo row shows ⌄ ⋯ + on hover; + opens Create worktree on that repo.
 - Picking a remote-only branch creates a tracking worktree and a space; a picked issue fills
   `dev/feat/N` and its title; pressing ⌘↵ twice makes one space.
+- A repo with `scripts: setup: echo $ORCA_WORKTREE_PATH` in its `orca.yaml` (or a local script in
+  Project settings) prints the new worktree's path and "Setup finished." when a worktree is created;
+  with "Wait for setup" off, it runs in a split under the agent.
 - A worktree with a linked issue and PR shows both badges; hovering shows the card; clicking a badge
   opens the viewer with PR tabs and the merge card.
 - Clicking a Markdown file in Files opens it rendered in a new tab; clicking it again reuses the tab.
