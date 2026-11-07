@@ -38,12 +38,12 @@ function toggleSidebar() {
 
 const clean = (s) => (s ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
 
-function lead(tab, all = panes()) {
+export function lead(tab, all = panes()) {
   const mine = all.filter((p) => p.tab === tab.id && p.terminal);
   return mine.find((p) => p.program?.agent) ?? mine.find((p) => p.focused) ?? mine[0];
 }
 
-function title(tab, l) {
+export function title(tab, l) {
   const prog = l?.program?.name;
   const live = clean(l?.title);
   const telling =
@@ -54,10 +54,10 @@ function title(tab, l) {
     live.toLowerCase() !== l?.program?.key;
   return tab.name === prog && telling ? live : tab.name;
 }
-const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
+export const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
 // A sub-agent without a pane isn't in agents(): its raw word, error counting as
 // blocked. It's never done: it reports to its parent, and the parent's done is the news.
-const kidStatus = (k, listed) => {
+export const kidStatus = (k, listed) => {
   const s = listed.get(k.address) ?? k.status;
   return s === "error" ? "blocked" : s === "done" ? "idle" : s;
 };
@@ -104,7 +104,7 @@ function grouping(sort, tabName) {
   return null;
 }
 
-function duration(ms) {
+export function duration(ms) {
   const m = Math.floor(ms / 60000);
   if (m < 1) return "<1m";
   if (m < 60) return `${m}m`;
@@ -113,7 +113,7 @@ function duration(ms) {
 }
 
 // The agent's icon from the app's program table: a one-color glyph or a picture.
-function icon(p, size, color) {
+export function icon(p, size, color) {
   if (!p?.icon) return null;
   return p.tint
     ? svg(p.icon).size(size).flex_none().text_color(color)
@@ -121,7 +121,7 @@ function icon(p, size, color) {
 }
 
 // What a row calls an agent: its tab's title, or failing that its own.
-function agentLabel() {
+export function agentLabel() {
   const tabs = spaces().flatMap((s) => s.tabs);
   return (a) => {
     const tab = tabs.find((candidate) => candidate.id === a.tab);
@@ -157,6 +157,55 @@ function gatherGroups(list, groupOf, sortId) {
   if (sortId === "prefix")
     ids.sort((x, y) => (x === "prefix-none") - (y === "prefix-none") || x.localeCompare(y));
   return ids.flatMap((id) => gathered.get(id));
+}
+
+// An agent's status mark; compact: a ! for blocked where a header already says "Needs you".
+export function statusMark(t, status, compact = false) {
+  const a = { status };
+  const color = t[a.status] ?? t.dim;
+  if (a.status === "working")
+    return Icon("spinner").size(12).mx(1).flex_none().text_color(t.working).spin(900);
+  if (a.status === "blocked" && compact)
+    return div()
+      .size(14)
+      .flex_none()
+      .rounded(4)
+      .bg(t.blocked + "26")
+      .text_size(TEXT.avatar)
+      .font_bold()
+      .text_color(t.blocked)
+      .flex()
+      .items_center()
+      .justify_center()
+      .child("!");
+  if (a.status === "blocked")
+    return div()
+      .flex_none()
+      .px(6)
+      .h(18)
+      .rounded(5)
+      .bg(t.blocked + "26")
+      .text_size(TEXT.avatar)
+      .font_semibold()
+      .text_color(t.blocked)
+      .flex()
+      .items_center()
+      .child("Needs you");
+  // Idle: a ring; done: a dot.
+  if (a.status === "idle")
+    return div()
+      .size(7)
+      .mx(3)
+      .flex_none()
+      .rounded(4)
+      .border(1.5)
+      .border_color(t.idle ?? t.dim);
+  return div()
+    .size(7)
+    .mx(3)
+    .flex_none()
+    .rounded(4)
+    .bg(a.status === "done" ? color : t.dim + "00");
 }
 
 export class Agents {
@@ -321,52 +370,8 @@ export class Agents {
       .child(this.status(t, { status: st }, compact));
   }
 
-  // compact: a ! for blocked where a header already says "Needs you".
   status(t, a, compact = false) {
-    const color = t[a.status] ?? t.dim;
-    if (a.status === "working")
-      return Icon("spinner").size(12).mx(1).flex_none().text_color(t.working).spin(900);
-    if (a.status === "blocked" && compact)
-      return div()
-        .size(14)
-        .flex_none()
-        .rounded(4)
-        .bg(t.blocked + "26")
-        .text_size(TEXT.avatar)
-        .font_bold()
-        .text_color(t.blocked)
-        .flex()
-        .items_center()
-        .justify_center()
-        .child("!");
-    if (a.status === "blocked")
-      return div()
-        .flex_none()
-        .px(6)
-        .h(18)
-        .rounded(5)
-        .bg(t.blocked + "26")
-        .text_size(TEXT.avatar)
-        .font_semibold()
-        .text_color(t.blocked)
-        .flex()
-        .items_center()
-        .child("Needs you");
-    // Idle: a ring; done: a dot.
-    if (a.status === "idle")
-      return div()
-        .size(7)
-        .mx(3)
-        .flex_none()
-        .rounded(4)
-        .border(1.5)
-        .border_color(t.idle ?? t.dim);
-    return div()
-      .size(7)
-      .mx(3)
-      .flex_none()
-      .rounded(4)
-      .bg(a.status === "done" ? color : t.dim + "00");
+    return statusMark(t, a.status, compact);
   }
 
   render() {

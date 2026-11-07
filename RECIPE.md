@@ -1,7 +1,7 @@
 # Orca
 
 A Herdr layout after the Orca desktop app: a left sidebar of projects with their worktrees nested
-under them, branch/issue/PR badges and a hover card per worktree; tabs as pills with a run button;
+under them and each one's agents and sub-agents nested under that, branch/issue/PR badges and a hover card per worktree; tabs as pills with a run button;
 framed panes with headers; a hideable right panel with Files and Git changes; and a status bar with
 Claude/Codex usage limits and live ports. GitHub issues and PRs open in-app, and new worktrees come
 from a branch, an issue, a PR or a new name.
@@ -22,7 +22,12 @@ at 12,16 over the sidebar. The root background is `canvas`; terminals have 14×1
     Each row has a second line: branch, `primary` badge on a main checkout, ↑/↓ when active, then a
     plug icon when it has live ports, the linked issue (green circle `#243`, purple when closed) and
     its PR (state icon `#453`, green open, red closed/failed, purple merged, grey draft).
-  - **Agents** (`better-sidebar`, `view: agents`) and a footer (`view: footer`).
+    Under each space or worktree, its **agents** (26px rows lined up with its name: program icon,
+    tab name, time in this state, status) and their **sub-agents** (24px rows on tree lines, any
+    depth). The header's **Agents** switch (bot icon) turns this on, the default.
+  - **Agents** panel (`better-sidebar`, `view: agents`): hidden while agents show in spaces; the
+    Agents switch off brings it back. A footer (`view: footer`): Settings, "3 agents · 2 need you"
+    while agents show in spaces, the Agents panel toggle, Add machine.
 - **Tab bar** (42px): `my-tabs` pills for the space's tabs; a **▶ Dev | ▾** run button
   (`t3-actions`, 108px); the right-panel toggle (36px).
 - **Main**: the active tab's panes as cards (radius 10, gap 8, 1px `border`, `accent` when focused,
@@ -41,7 +46,17 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
 ## How it behaves
 
 - **Agent status** is Herdr's: blocked and done show on spaces, tabs, agents and pane headers
-  (working spinner, "Needs you", done dot); desktop notifications mirror "needs you" and "finished".
+  (working spinner, "Needs you", done dot, idle ring); desktop notifications mirror "needs you" and
+  "finished".
+- **Agents in spaces**: clicking an agent focuses its pane; a sub-agent focuses its pane if it has
+  one, else opens a peek. An agent's chevron folds its sub-agents (folded: their count, in the most
+  urgent one's color). A repo row's chevron folds its worktrees and all their agents together; other
+  rows show a chevron on hover that folds their agents. A folded row's second line says "2 agents ·
+  3 sub" with the most urgent status ("Needs you" in full). An agent whose folded sub-agent needs
+  you shows "Needs you" itself, so folding never hides it. A sub-agent kept as a pane is listed only under its parent.
+  While the Agents panel is hidden, `agent.next` / `agent.prev` follow the sidebar's order. The
+  footer's orange "N need you" goes to the first agent that needs you. The collapsed rail shows no
+  agent rows, only each space's status.
 - **Spaces**: click selects, drag reorders within a machine, right-click opens `my-menu`. Hovering a
   repo row shows **⌄/›** (fold its worktrees, remembered; stays visible while folded), **⋯** (the
   menu) and **+** (Create worktree for that repo). Hovering any row ~450ms opens the **hover card**:
@@ -93,7 +108,8 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
 `better-changes` (the `changes` slot, `"place": "none"`) and `better-config`.
 
 - `better-sidebar` (munza's Better Sidebar, modified; views by `props.view`: spaces, `agents`,
-  `footer`, `panel-toggle`, `card`, `groups`), `my-tabs`, `my-pane`, `my-status`, `my-menu`
+  `footer`, `panel-toggle`, `card`, `groups`; `views/space-agents.js` draws agents in the spaces
+  list from `agents()` and `terminals()` (`parent`), reusing the Agents panel's helpers), `my-tabs`, `my-pane`, `my-status`, `my-menu`
   (terminal and space menus; `terminal_menu: "my-menu"`), `my-new-menu`, `my-worktree` (remove
   confirm): modified clones of Herdr's mods.
 - `issues` (table, viewer, `pr.js`, `start.js`, `prefill.sh`), `new-worktree` (dialog, `git.js`,
@@ -101,7 +117,7 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   `files-open-with` (+ `file-icons` for Material icons), `t3-actions`, `sidebar-nav`,
   `automations`, `usage-limits` (`helpers/*.sh`), `live-ports`, `desktop-notifications`,
   `new-project`, `open-vscode`, `excalidraw`.
-- Shared state keys: `live-ports`, `better-sidebar.hover`, `pane-heads`, `issues.pick`,
+- Shared state keys: `live-ports`, `better-sidebar.hover`, `better-sidebar.inline-agents`, `pane-heads`, `issues.pick`,
   `issues.changed`, `projects.settings` (per `JSON.stringify([machine, main checkout])`: name, icon,
   `base`, `location`, `issue_branch`, `agent`, `setup`, `setupWhen`, `setupWait`),
   `projects.location`, `files-open-with.tabs`,
@@ -121,6 +137,9 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   hasn't built yet.
 - GitHub only links "Closes #N" when the PR targets the default branch; badges also read the body
   and the branch name.
+- Agents in spaces and the Agents panel are separate mod copies with their own `localStorage`
+  (folds, time in state); the switch keeps one of them showing (`layout.hide` / `layout.show`
+  on the `agents` block), and the layout ships with that block `"hidden": true`.
 - The hover card is a `window` overlay (doesn't take the keyboard); worktree badges need `gh`.
 - Remote machines: prefill falls back to the clipboard; media and watchers are local-only.
 - `herdr.yaml` / `orca.yaml` are parsed only for `scripts.setup` (one line, or a `|` / `>` block),
@@ -132,6 +151,9 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
 - `herdr-app check` passes for every mod, `layout.switch {"name":"orca"}` shows it, and
   `herdr-app status` lists no errors.
 - A repo row shows ⌄ ⋯ + on hover; + opens Create worktree on that repo.
+- An agent shows under its space or worktree; `hc run -- sleep 60` from that agent shows a nested
+  row on a tree line under it; folding the repo row hides both and its second line counts them;
+  turning the Agents switch off shows the Agents panel.
 - Picking a remote-only branch creates a tracking worktree and a space; a picked issue fills
   `dev/feat/N` and its title; pressing ⌘↵ twice makes one space.
 - A repo with `scripts: setup: echo $HERDR_WORKTREE_PATH` in its `herdr.yaml` (or a local script in

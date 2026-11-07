@@ -5,6 +5,8 @@ import { h_flex, v_flex } from "gpui-base";
 import { theme, run, updates, layout } from "herdr";
 import { IconButton } from "./ui.js";
 import { findNode } from "./find-node.js";
+import { inlineAgents, readAgents, tally, subTree, allSpaceIds } from "./space-agents.js";
+import { kidStatus } from "./agents.js";
 
 export class Footer {
   init() {}
@@ -21,6 +23,7 @@ export class Footer {
       .child(h_flex().items_center()
         .child(row("settings", "settings", "Settings", false, () => run("app.settings")).flex_1().min_w(0)
           .when(Boolean(updates().app.ready), (el) => el.child(div().size(6).rounded_full().bg(t.accent))))
+        .when(inlineAgents() && !collapsed, (el) => el.child(this.summary(t)))
         .when(Boolean(agents) && !collapsed, (el) => el.child(IconButton({
           id: "agents-toggle",
           icon: "panel-bottom",
@@ -30,5 +33,27 @@ export class Footer {
           onClick: () => run("layout.toggle", { id: agents.id }),
         }))))
       .child(row("machine", "plus", "Add machine", true, () => run("mod.open", { name: "machine-add" })));
+  }
+
+  // "6 agents · 3 need you" while agents show in spaces; the orange part goes to the first.
+  summary(t) {
+    const view = readAgents();
+    const { count, blocked } = tally(view, allSpaceIds());
+    if (!count) return div();
+    return h_flex().flex_none().gap(4).items_center().pr(4).text_size(11.5).text_color(t.dim)
+      .child(`${count} agent${count === 1 ? "" : "s"}`)
+      .when(blocked > 0, (el) => el.child(div().id("needs-you").font_semibold().text_color(t.blocked).cursor_pointer()
+        .tooltip("Go to the first one").on_click(() => this.goToBlocked(view)).child(`· ${blocked} need${blocked === 1 ? "s" : ""} you`)));
+  }
+
+  goToBlocked(view) {
+    for (const list of view.bySpace.values())
+      for (const a of list) {
+        if (a.status === "blocked") return run("pane.focus", { pane: a.pane });
+        const sub = subTree(view.all, a.address).find((s) => kidStatus(s.t, view.status) === "blocked");
+        if (!sub) continue;
+        const pane = view.paneOf.get(sub.t.address);
+        return pane ? run("pane.focus", { pane }) : run("terminal.peek", { terminal: sub.t.address });
+      }
   }
 }

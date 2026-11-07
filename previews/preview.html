@@ -14,7 +14,16 @@
   .sp .t { display: flex; align-items: center; gap: 9px; }
   .sp .d { display: flex; align-items: center; gap: 6px; height: 20px; font-size: 11.5px; color: var(--dim); }
   .av { width: 18px; height: 18px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; flex: none; }
-  .agent { height: 30px; padding: 0 16px; display: flex; align-items: center; gap: 10px; font-size: 12.8px; }
+  .ag { height: 26px; margin: 0 4px 0 12px; padding: 0 8px 0 52px; display: flex; align-items: center; gap: 8px; border-radius: 7px; font-size: 12.5px; }
+  .ag.on { background: var(--raised); }
+  .ag .av { width: 14px; height: 14px; border-radius: 4px; font-size: 8px; }
+  .ag.sub { height: 24px; gap: 0; padding-left: 58px; font-size: 12px; color: var(--muted); }
+  .ag.sub .av { width: 13px; height: 13px; margin-right: 7px; opacity: .85; }
+  .tl { position: relative; width: 11px; height: 24px; margin-right: 6px; flex: none; }
+  .tl.thru::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1.5px solid var(--input); }
+  .tl::after { content: ""; position: absolute; left: 0; top: 0; width: 9px; height: 12px; border-left: 1.5px solid var(--input); border-bottom: 1.5px solid var(--input); border-bottom-left-radius: 6px; }
+  .need { height: 18px; padding: 0 6px; display: inline-flex; align-items: center; border-radius: 5px; background: #d2992226; color: var(--amber); font-size: 10.5px; font-weight: 600; flex: none; }
+  .ring { width: 7px; height: 7px; margin: 0 3px; border-radius: 50%; border: 1.5px solid var(--dim); flex: none; }
   .work { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   .tabs { height: 42px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 12px; background: var(--chrome); border-bottom: 1px solid var(--border); }
   .tab { height: 29px; padding: 0 10px; display: flex; align-items: center; gap: 7px; border-radius: 7px; color: var(--muted); font-size: 12.8px; }
@@ -40,21 +49,22 @@
       <div class="nav"><svg class="i"><use href="#issue"/></svg>Issues</div>
       <div class="nav"><svg class="i"><use href="#settings"/></svg>Mod settings</div>
     </div>
-    <div class="sec"><span class="grow">Spaces</span><svg class="i"><use href="#folder"/></svg>&nbsp;&nbsp;<svg class="i"><use href="#plus"/></svg></div>
+    <div class="sec"><span class="grow">Spaces</span><span class="row" style="height: 22px; padding: 0 7px; gap: 5px; margin-right: 8px; border-radius: 6px; background: var(--hover); color: var(--fg); font-size: 11px"><svg class="i" style="width: 13px"><use href="#bot"/></svg>Agents</span><svg class="i"><use href="#folder"/></svg>&nbsp;&nbsp;<svg class="i"><use href="#plus"/></svg></div>
     <div class="grp">
       <div class="grph"><svg class="i muted"><use href="#folder"/></svg><b class="grow">Acme</b><span class="dim" style="font-size: 11px">3</span><span class="ibtn" style="width: 22px"><svg class="i"><use href="#plus"/></svg></span><span class="ibtn" style="width: 22px"><svg class="i"><use href="#dots"/></svg></span><svg class="i dim" style="width: 12px"><use href="#chev-down"/></svg></div>
       <div class="sp" style="background: var(--hover)"><div class="t"><span class="av" style="background: #22a99a">S</span><span class="grow">storefront</span><span class="ibtn" style="width: 22px; height: 22px"><svg class="i" style="width: 13px"><use href="#chev-down"/></svg></span><span class="ibtn" style="width: 22px; height: 22px"><svg class="i" style="width: 13px"><use href="#dots"/></svg></span><span class="ibtn" style="width: 22px; height: 22px; color: var(--fg)"><svg class="i" style="width: 13px"><use href="#plus"/></svg></span></div><div class="d" style="padding-left: 27px">main <span class="badge">primary</span></div></div>
       <div class="sp active"><div class="t" style="padding-left: 22px"><svg class="i dim" style="width: 13px"><use href="#git-branch"/></svg><span class="grow trunc">Saved carts</span></div><div class="d" style="padding-left: 44px"><span class="grow trunc">dev/feat/198</span><svg class="i muted" style="width: 13px"><use href="#plug"/></svg><span class="row green" style="gap: 3px"><svg class="i" style="width: 13px"><use href="#issue"/></svg>#198</span><span class="row green" style="gap: 3px"><svg class="i" style="width: 13px"><use href="#pull"/></svg>#212</span></div></div>
+      <div class="ag on"><span class="av" style="background: var(--clay)">✻</span><span class="grow trunc">Saved carts</span><svg class="i dim" style="width: 11px"><use href="#chev-down"/></svg><span class="dim" style="font-size: 11px">8m</span><span class="spin"></span></div>
+      <div class="ag sub"><span class="tl thru"></span><span class="av" style="background: var(--clay)">✻</span><span class="grow trunc">explore · cart service</span><span class="spin"></span></div>
+      <div class="ag sub"><span class="tl"></span><span class="av" style="background: var(--clay)">✻</span><span class="grow trunc" style="color: var(--fg)">test-runner</span><span class="need">Needs you</span></div>
       <div class="sp"><div class="t" style="padding-left: 22px"><svg class="i dim" style="width: 13px"><use href="#git-branch"/></svg><span class="grow trunc">Checkout redesign</span></div><div class="d" style="padding-left: 44px"><span class="grow trunc">dev/feat/203</span><span class="row" style="gap: 3px; color: #6e7681"><svg class="i" style="width: 13px"><use href="#pull"/></svg>#207</span></div></div>
+      <div class="ag"><span class="av" style="background: var(--clay)">✻</span><span class="grow trunc">Claude</span><span class="dim" style="font-size: 11px">2m</span><span class="need">Needs you</span></div>
       <div class="sp"><div class="t"><span class="av" style="background: #8b7cf6">A</span><span class="grow">api</span></div><div class="d" style="padding-left: 27px">main <span class="badge">primary</span><span class="grow"></span><svg class="i muted" style="width: 13px"><use href="#plug"/></svg></div></div>
+      <div class="ag" style="padding-left: 35px"><span class="av" style="background: #e6e8eb; color: #111">&gt;</span><span class="grow trunc">Codex</span><span class="dim" style="font-size: 11px">14m</span><span style="width: 7px; height: 7px; margin: 0 3px; border-radius: 50%; background: var(--green)"></span></div>
     </div>
     <div class="sp" style="margin: 6px 8px 0 12px"><div class="t"><span class="av" style="background: #d9649a">D</span><span class="grow">dotfiles</span></div><div class="d" style="padding-left: 27px">main <span class="badge">primary</span></div></div>
     <div class="grow"></div>
-    <div class="sec" style="border-top: 1px solid var(--border); padding-top: 12px"><span class="grow">Agents</span></div>
-    <div class="agent"><span class="av" style="background: var(--clay)">✻</span><span class="grow trunc">Saved carts <span class="dim">· Claude</span></span><span class="spin"></span></div>
-    <div class="agent"><span class="av" style="background: var(--clay)">✻</span><span class="grow trunc">Checkout redesign <span class="dim">· Claude</span></span><span class="tag" style="border: 0; background: #d2992226; color: var(--amber); font-weight: 600">Needs you</span></div>
-    <div class="agent" style="margin-bottom: 8px"><span class="av" style="background: #e6e8eb; color: #111">&gt;</span><span class="grow trunc">api <span class="dim">· Codex</span></span><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--green)"></span></div>
-    <div class="row" style="height: 34px; padding: 0 16px; gap: 10px; border-top: 1px solid var(--border); color: var(--muted)"><svg class="i"><use href="#gear"/></svg><span class="grow">Settings</span></div>
+    <div class="row" style="height: 34px; padding: 0 16px; gap: 10px; border-top: 1px solid var(--border); color: var(--muted)"><svg class="i"><use href="#gear"/></svg><span class="grow">Settings</span><span class="dim" style="font-size: 11.5px">3 agents</span><span class="amber" style="font-size: 11.5px; font-weight: 600">· 2 need you</span></div>
     <div class="row" style="height: 34px; padding: 0 16px 6px; gap: 10px; color: var(--muted)"><svg class="i"><use href="#plus"/></svg>Add machine</div>
   </div>
 

@@ -17,6 +17,7 @@ import {
   window,
   layout,
   nextCommand,
+  setAgentOrder,
 } from "herdr";
 import { PRStatusObserver, prPlaceKey, prAppearance } from "../git/pr-status.js";
 import { spaceFolder, checkoutKey, readCheckout } from "../git/checkouts.js";
@@ -25,6 +26,7 @@ import { loadSettings, duration } from "../settings.js";
 import { findNode } from "./find-node.js";
 import { TEXT, Icon, IconButton, Badge } from "./ui.js";
 import { HOVER_KEY, LIVE_KEY } from "./card.js";
+import { SpaceAgents, inlineAgents, setInlineAgents } from "./space-agents.js";
 import { readGroups, groupTint, toggleFold, openNameDialog, openProjectPicker, openGroupMenu } from "./groups.js";
 
 const CARD_DELAY_MS = 450;
@@ -104,6 +106,15 @@ export class Spaces {
       /* Ignore invalid saved UI state. */
     }
     this.worktreeCount = {};
+    this.worktreeIds = {}; // repo key -> its worktree spaces' ids
+    this.agents = new SpaceAgents();
+    // Spaces whose agents are folded away (a repo's row folds through reposFolded).
+    this.agentsFolded = new Set();
+    try {
+      this.agentsFolded = new Set(JSON.parse(localStorage.getItem("spaces.agents-folded") ?? "[]"));
+    } catch {
+      /* Ignore invalid saved UI state. */
+    }
     this.folded = new Set();
     try {
       this.folded = new Set(JSON.parse(localStorage.getItem("machines.folded") ?? "[]"));
@@ -381,6 +392,7 @@ export class Spaces {
     const out = [];
     const placed = new Set(); // repos whose worktrees are listed (under the first of its spaces)
     this.worktreeCount = {};
+    this.worktreeIds = {};
     for (const r of list) {
       if (nested(r)) continue;
       out.push({ ...r, tree: null });
@@ -388,10 +400,12 @@ export class Spaces {
       placed.add(r.g.repo);
       const kids = list.filter((k) => nested(k) && k.g.repo === r.g.repo);
       this.worktreeCount[r.g.repo] = kids.length;
+      this.worktreeIds[r.g.repo] = kids.map((k) => k.w.id);
       // A folded repo keeps its worktrees out of the list (its row's chevron).
       if (this.reposFolded.has(r.g.repo)) continue;
       kids.forEach((k, n) => out.push({ ...k, tree: n === kids.length - 1 ? "└─" : "├─" }));
     }
+    this.drawn = out;
     return out;
   }
 
@@ -706,7 +720,7 @@ export class Spaces {
   hasDetail(w, g) {
     const status = this.checkoutStatus(w);
     const moved = w.active && (g?.ahead > 0 || g?.behind > 0);
-    return Boolean(this.shownBranch(g) || moved || status?.prs.length || status?.issue || status?.error || this.ports(w).length);
+    return Boolean(this.shownBranch(g) || moved || status?.prs.length || status?.issue || status?.error || this.ports(w).length || this.foldedSummary(w, g));
   }
 
   // Ports listening in this space's checkout, published by the live-ports mod; listed in the hover card.
@@ -755,7 +769,66 @@ export class Spaces {
             .tooltip(`PR refresh failed: ${status.error}`)
             .child(status.prs.length ? "· stale" : "PR unavailable"),
         ),
-      );
+      )
+      .when(Boolean(this.foldedSummary(w, g)), (el) => el.child(this.foldedSummary(w, g)));
+  }
+
+  // ── Agents inside spaces (views/space-agents.js) ─────────────────────────
+
+  isMain(g) {
+    return Boolean(g?.repo) && !g.linked;
+  }
+
+  // A repo's row folds its worktrees and agents together; other rows fold their agents.
+  agentsHidden(w, g) {
+    return this.isMain(g) && this.worktreeCount[g.repo] ? this.reposFolded.has(g.repo) : this.agentsFolded.has(w.id);
+  }
+
+  // The spaces a folded row stands for: itself, and a repo's worktrees.
+  coveredSpaces(w, g) {
+    return [w.id, ...(this.isMain(g) ? (this.worktreeIds[g.repo] ?? []) : [])];
+  }
+
+  foldedSummary(w, g) {
+    if (!inlineAgents() || !this.agentsHidden(w, g)) return null;
+    return this.agents.summary(this.coveredSpaces(w, g), theme());
+  }
+
+  hasAgents(w, g) {
+    return inlineAgents() && this.coveredSpaces(w, g).some((id) => this.agents.has(id));
+  }
+
+  toggleAgents(w, g, cx) {
+    if (this.isMain(g) && this.worktreeCount[g.repo]) {
+      if (!this.reposFolded.delete(g.repo)) this.reposFolded.add(g.repo);
+      localStorage.setItem("repos.folded", JSON.stringify([...this.reposFolded]));
+    } else {
+      if (!this.agentsFolded.delete(w.id)) this.agentsFolded.add(w.id);
+      localStorage.setItem("spaces.agents-folded", JSON.stringify([...this.agentsFolded]));
+    }
+    cx.notify();
+  }
+
+  // The header's switch between agents in spaces and the Agents panel.
+  agentsSwitch(t) {
+    const on = inlineAgents();
+    return h_flex()
+      .id("inline-agents")
+      .h(26)
+      .px(7)
+      .gap(5)
+      .flex_none()
+      .items_center()
+      .rounded(6)
+      .text_size(TEXT.caption)
+      .cursor_pointer()
+      .when(on, (el) => el.bg(t.hover).text_color(t.foreground))
+      .when(!on, (el) => el.text_color(t.dim))
+      .tooltip(on ? "Agents show in spaces · click for the Agents panel" : "Show agents in spaces")
+      .hover((s) => s.bg(t.hover).text_color(t.foreground))
+      .on_click(() => setInlineAgents(!on, findNode(layout(), "agents")))
+      .child(Icon("bot", 13))
+      .child("Agents");
   }
 
   // ── Expanded/compact rows and sidebar rendering ──────────────────────────
@@ -779,7 +852,7 @@ export class Spaces {
     if (this.pressed !== null && this.over === i && this.pressed !== i)
       row.child(this.dropLine(i, t));
     // The wrapper drives the hover card; the row itself handles dragging.
-    return v_flex()
+    const wrap = v_flex()
       .id(`space-wrap-${w.id}`)
       .flex_none()
       .on_mouse_move((e) => {
@@ -787,6 +860,11 @@ export class Spaces {
       })
       .on_hover((hovered, cx) => this.hoverRow(w, hovered, cx))
       .child(this.withDragging(row, w, i));
+    if (!inlineAgents() || this.agentsHidden(w, g) || !this.agents.has(w.id)) return wrap;
+    // Agents line up with the space's name: past the avatar, or past a worktree's branch icon.
+    return v_flex().id(`space-block-${w.id}`).flex_none().pb(2)
+      .child(wrap)
+      .children(this.agents.rows(w.id, t, tree ? 52 : 35));
   }
 
   // ── Hover card: the row's PR, issue and ports (views/card.js) ────────────
@@ -909,14 +987,27 @@ export class Spaces {
       .child(
         div().flex_1().min_w(0).truncate().tooltip(w.name).text_color(t.foreground).child(shownName(w, g)),
       )
-      .when(!tree && Boolean(g) && !g.linked, (el) => el.child(this.repoButtons(w, g, t)));
+      .when(!tree && Boolean(g) && !g.linked, (el) => el.child(this.repoButtons(w, g, t)))
+      .when((Boolean(tree) || !this.isMain(g)) && this.hasAgents(w, g) && (this.hovering === w.id || this.agentsHidden(w, g)), (el) =>
+        el.child(this.foldAgentsButton(w, g, t)),
+      );
+  }
+
+  foldAgentsButton(w, g, t) {
+    const hidden = this.agentsHidden(w, g);
+    return div()
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .on_mouse_up("left", (_e, cx) => cx.stop_propagation())
+      .child(IconButton({ id: `space-fold-agents-${w.id}`, icon: hidden ? "chevron-right" : "chevron-down",
+        label: hidden ? "Show agents" : "Hide agents", iconSize: 13, muted: true, onClick: (cx) => this.toggleAgents(w, g, cx) }).size(22));
   }
 
   // A repo's row: fold its worktrees, its menu, and a new worktree, shown on hover.
   // A folded repo keeps its chevron visible so its hidden worktrees are findable.
   repoButtons(w, g, t) {
     const kids = this.worktreeCount[g.repo] ?? 0;
-    const folded = this.reposFolded.has(g.repo);
+    const folded = this.agentsHidden(w, g);
+    const agents = this.hasAgents(w, g);
     const hovered = this.hovering === w.id;
     const button = (id, icon, label, onClick) =>
       div()
@@ -927,14 +1018,9 @@ export class Spaces {
       .flex_none()
       .gap(1)
       .items_center()
-      .when(kids > 0 && (hovered || folded), (el) =>
+      .when((kids > 0 || agents) && (hovered || folded), (el) =>
         el.child(
-          button("repo-fold", folded ? "chevron-right" : "chevron-down", folded ? `Show ${kids} worktree${kids === 1 ? "" : "s"}` : "Hide worktrees", (cx) => {
-            if (folded) this.reposFolded.delete(g.repo);
-            else this.reposFolded.add(g.repo);
-            localStorage.setItem("repos.folded", JSON.stringify([...this.reposFolded]));
-            cx.notify();
-          }),
+          button("repo-fold", folded ? "chevron-right" : "chevron-down", this.foldLabel(kids, agents, folded), (cx) => this.toggleAgents(w, g, cx)),
         ),
       )
       .when(hovered, (el) =>
@@ -946,6 +1032,11 @@ export class Spaces {
             ),
           ),
       );
+  }
+
+  foldLabel(kids, agents, folded) {
+    const what = [kids && `${kids} worktree${kids === 1 ? "" : "s"}`, agents && "agents"].filter(Boolean).join(" and ");
+    return folded ? `Show ${what}` : `Hide ${kids && agents ? "worktrees and agents" : kids ? "worktrees" : "agents"}`;
   }
 
   avatar(w, t, g) {
@@ -1015,6 +1106,12 @@ export class Spaces {
   render() {
     const t = theme();
     const collapsed = (this.width ?? findNode(layout(), "sidebar")?.size?.px ?? Infinity) < 160;
+    this.agents.refresh();
+    const rows = this.grouped(t, collapsed);
+    // With the Agents panel away, agent.next / agent.prev follow this list.
+    const panel = findNode(layout(), "agents");
+    if (inlineAgents() && (!panel || panel.hidden))
+      setAgentOrder(this.agents.order(this.drawn.flatMap((r) => [r.w.id, ...(r.g && this.reposFolded.has(r.g.repo) ? (this.worktreeIds[r.g.repo] ?? []) : [])])));
     return v_flex()
       .id("better-sidebar-root")
       .size_full()
@@ -1040,7 +1137,8 @@ export class Spaces {
             h_flex()
               .gap(2)
               .items_center()
-              // The agents toggle lives in the footer, beside Settings.
+              // The Agents panel toggle lives in the footer, beside Settings.
+              .when(!collapsed, (el) => el.child(this.agentsSwitch(t)))
               .when(!collapsed, (el) =>
                 el.child(
                   IconButton({
@@ -1077,7 +1175,7 @@ export class Spaces {
             this.pressed = null;
             cx.notify();
           })
-          .children(this.grouped(t, collapsed)),
+          .children(rows),
       );
   }
 }
