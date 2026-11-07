@@ -21,8 +21,17 @@ async function isWorktree(s) {
 }
 
 // Closing the last tab of a worktree space removes the worktree instead (the dialog checks first).
-function closeTab(id, cx) {
+// ask: keys (cmd-w) confirm first; the last tab already asks through tab.close or the worktree dialog.
+function closeTab(id, cx, ask = false) {
   const tab = id || focused()?.tab, s = spaces().find((x) => x.tabs.some((c) => c.id === tab));
+  if (s && s.tabs.length > 1 && ask) {
+    const name = s.tabs.find((c) => c.id === tab)?.name;
+    return openOverlay({ mod: "confirm", kind: "dialog", width: 400, height: 170, props: {
+      title: `Close tab “${name}”?`,
+      detail: "Its terminals end, including any agents running in it.",
+      command: { name: "tab.close", args: { id: tab } },
+    } });
+  }
   if (!s || s.tabs.length > 1) return run("tab.close", { id: tab });
   cx.spawn(async () => {
     const linked = await isWorktree(s).catch(() => false);
@@ -32,10 +41,10 @@ function closeTab(id, cx) {
 }
 
 // The last pane of a tab closes the tab, so it goes through closeTab's worktree check.
-function closePane(id, cx) {
+function closePane(id, cx, ask = false) {
   const pane = id || focused()?.pane, p = panes().find((x) => x.pane === pane);
   if (!p || panes().filter((x) => x.tab === p.tab).length > 1) return run("pane.close", pane ? { pane } : {});
-  closeTab(p.tab, cx);
+  closeTab(p.tab, cx, ask);
 }
 
 export default class Tabs extends View {
@@ -43,11 +52,12 @@ export default class Tabs extends View {
     this.pressed = null;
     this.panels = JSON.parse(localStorage.getItem("panels") ?? "{}");
     // "close-tab[:id]" / "close-pane[:id]" from cmd-w, cmd-shift-w (layout:orca-* keys) and my-menu's tab Close.
+    // Only the keys send no id, so only they ask first; menu and button clicks close at once.
     cx.spawn(async (cx) => {
       for (;;) {
         const c = await nextCommand();
-        if (c === "close-tab" || c.startsWith("close-tab:")) closeTab(c.slice("close-tab:".length), cx);
-        else if (c === "close-pane" || c.startsWith("close-pane:")) closePane(c.slice("close-pane:".length), cx);
+        if (c === "close-tab" || c.startsWith("close-tab:")) closeTab(c.slice("close-tab:".length), cx, c === "close-tab");
+        else if (c === "close-pane" || c.startsWith("close-pane:")) closePane(c.slice("close-pane:".length), cx, c === "close-pane");
       }
     });
   }
