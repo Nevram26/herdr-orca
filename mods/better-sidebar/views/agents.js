@@ -260,8 +260,11 @@ export class Agents {
     });
   }
 
+  // A sub-agent kept as a pane is focused there; one without a pane is peeked.
   peek(addr) {
-    run("terminal.peek", { terminal: addr });
+    const pane = this.paneOf?.get(addr);
+    if (pane) run("pane.focus", { pane });
+    else run("terminal.peek", { terminal: addr });
   }
 
   // Live sub-agents of `addr`, depth first, each with the tree lines in front of it.
@@ -403,11 +406,17 @@ export class Agents {
     const sort = sortOf();
     const all = terminals();
     const now = Date.now();
-    const unordered = agents();
-    this.listed = new Map(unordered.map((a) => [a.address, a.status]));
-    this.track(unordered, now);
-    this.hold(unordered);
+    const listedAgents = agents();
+    this.listed = new Map(listedAgents.map((a) => [a.address, a.status]));
+    this.paneOf = new Map(listedAgents.map((a) => [a.address, a.pane]));
+    this.track(listedAgents, now);
+    this.hold(listedAgents);
     this.prunePins(all);
+    // A sub-agent with a pane shows nested under its listed parent, not twice. The rail has no nesting.
+    const parentOf = new Map(all.map((k) => [k.address, k.parent]));
+    const unordered = narrow()
+      ? listedAgents
+      : listedAgents.filter((a) => this.pins.includes(a.address) || !this.listed.has(parentOf.get(a.address)));
 
     const byPriority = sort.id === "priority";
     const urgency = this.urgencies(unordered, all);
