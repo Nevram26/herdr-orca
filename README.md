@@ -74,9 +74,15 @@ tested on macOS with Herdr 0.1.13, and on Windows 11 (see [Windows](#windows)).
 - Setup scripts and clones run in Git's `sh` and then leave you in PowerShell.
 - Sleep and Wake type the resume command into PowerShell. Resuming after a restart is offered after
   a reboot, a logout or a herdr-core crash: on Windows a terminal whose shell is killed just closes.
-- Not on Windows yet: desktop notifications, pasting an issue's task into Claude (it's copied to the
-  clipboard instead, so press Ctrl+V), the Files panel's Open with menu, Excalidraw's undo and redo
-  keys, and Automations (no `herdr-automations` for Windows).
+- Desktop notifications are Windows toasts from "Herdr", and clicking one brings Herdr forward on
+  that agent. The first one registers two things for your user only: the toast's app id
+  (`HKCU\Software\Classes\AppUserModelId\Herdr.DesktopNotifications`; Windows drops toasts from
+  apps it doesn't know) and the `herdr-agent:` link a click opens (`HKCU\Software\Classes\herdr-agent`,
+  handled by `click.js` through `wscript`, which only ever focuses an agent). `reg delete` either key
+  to remove it.
+- Not on Windows yet: pasting an issue's task into Claude (it's copied to the clipboard instead, so
+  press Ctrl+V), the Files panel's Open with menu, Excalidraw's undo and redo keys, and Automations
+  (no `herdr-automations` for Windows).
 
 ## Updating this repo
 

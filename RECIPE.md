@@ -245,6 +245,12 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   `Set-Location -LiteralPath '…'; if ($?) { & '…' }` (no `&&` in PowerShell 5.1). Codex's session
   is the newest rollout whose first line has this `"cwd"`. A killed shell ends its terminal there,
   so the restart offer only follows a real core loss or reboot.
+- Desktop notifications on Windows: `toast.ps1` (WinRT toasts, silent, tag = terminal). Windows
+  drops toasts from an app id it doesn't know, and Herdr's Start entry is only an exe path, so it
+  registers `Herdr.DesktopNotifications` per user (DisplayName, IconUri). A click opens
+  `herdr-agent:<terminal>`, a per-user URL handler running `click.js` under `wscript` (no console
+  window): it accepts only an address (any page can open such a link), runs `herdr-app do
+  agent.focus` and `AppActivate("Herdr")`. Text reaches `toast.ps1` URI-encoded, never as script.
 
 ## Done when
 
