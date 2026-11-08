@@ -31,7 +31,7 @@ import { TEXT, Icon, IconButton, Badge } from "./ui.js";
 import { HOVER_KEY, LIVE_KEY } from "./card.js";
 import { SpaceAgents, inlineAgents, setInlineAgents } from "./space-agents.js";
 import { ORDER_KEY } from "./space-nav.js";
-import { readGroups, groupTint, toggleFold, openNameDialog, openProjectPicker, openGroupMenu } from "./groups.js";
+import { readGroups, groupTint, isFolded, setFold, toggleFold, fileUnder, newGroupWith, openNameDialog, openProjectPicker, openGroupMenu } from "./groups.js";
 
 const CARD_DELAY_MS = 450;
 const CARD_CLOSE_MS = 250;
@@ -133,10 +133,11 @@ export class Spaces {
     } catch {
       /* Ignore invalid saved UI state. */
     }
-    // "better-sidebar.new-group" in keys.json asks for a new group's name.
+    // "better-sidebar.new-group" in keys.json asks for a new folder's name.
     cx.spawn(async () => {
-      for (;;) if ((await nextCommand()) === "new-group") openNameDialog();
+      for (;;) if ((await nextCommand()) === "new-group") openNameDialog(null, this.focusedMachine());
     });
+    this.revealed = spaces().find((w) => w.active)?.id ?? null;
     this.refreshMachines(cx);
     cx.timer.every(15000, (cx) => this.refreshMachines(cx));
     // `git status` walks the whole tree, on another machine a process there:
@@ -157,6 +158,11 @@ export class Spaces {
   checkNew(cx) {
     const now = Date.now();
     const sp = spaces();
+    const active = sp.find((w) => w.active)?.id ?? null;
+    if (active !== this.revealed) {
+      this.revealed = active;
+      if (active) this.reveal(active, cx);
+    }
     this.updateColors(sp);
     for (const s of sp) if (!this.shown.has(s.id)) this.born[s.id] ??= now;
     const ps = panes();
@@ -385,20 +391,20 @@ export class Spaces {
   // Space ids top to bottom as drawn: machines, your groups, repos with their
   // worktrees. Folded rows keep their spaces in place.
   navOrder() {
-    const { groups, projects } = readGroups();
+    const { projects } = readGroups();
     const units = [];
     for (const r of this.drawn ?? []) {
       const ids = this.rowIds(r);
       if (r.tree && units.length) units[units.length - 1].ids.push(...ids);
-      else units.push({ m: r.w.machine ?? null, key: r.g?.repo ?? null, ids });
+      else units.push({ m: r.w.machine ?? null, key: this.keyOf(r), ids });
     }
-    const inGroup = (u, id) => u.key && projects[u.key] === id;
-    const byGroup = (us) => [
-      ...groups.flatMap((gr) => us.filter((u) => inGroup(u, gr.id))),
-      ...us.filter((u) => !groups.some((gr) => inGroup(u, gr.id))),
-    ];
+    const inGroup = (u, id) => projects[u.key] === id;
+    const byGroup = (us, m) => {
+      const shown = this.shownGroups(m);
+      return [...shown.flatMap((gr) => us.filter((u) => inGroup(u, gr.id))), ...us.filter((u) => !shown.some((gr) => inGroup(u, gr.id)))];
+    };
     const remote = [...new Set(units.map((u) => u.m).filter(Boolean))].sort();
-    return [...new Set([null, ...remote].flatMap((m) => byGroup(units.filter((u) => u.m === m))).flatMap((u) => u.ids))];
+    return [...new Set([null, ...remote].flatMap((m) => byGroup(units.filter((u) => u.m === m), m)).flatMap((u) => u.ids))];
   }
 
   // When the active space changes (keys, agent.next, a click), bring its row on screen.
@@ -477,6 +483,14 @@ export class Spaces {
     const list = sp
       .map((w, i) => ({ w, i, g: this.git[checkoutKey(w, ps)] ?? null }))
       .filter((r) => this.shown.has(r.w.id));
+    // Each space's folder unit (a repo, or the space itself) and where those units live.
+    this.unitKey = {};
+    this.unitMachine = {};
+    for (const r of list) {
+      const k = this.keyOf(r);
+      this.unitKey[r.w.id] = k;
+      this.unitMachine[k] = r.w.machine ?? null;
+    }
     const mains = new Set(list.filter((r) => r.g && !r.g.linked).map((r) => r.g.repo));
     const nested = (r) => r.g?.linked && mains.has(r.g.repo);
     const out = [];
@@ -523,7 +537,7 @@ export class Spaces {
     const rows = this.ordered();
     this.owners = [];
     const draw = (r) => this.own(collapsed ? this.compact(r, t) : this.row(r, t), this.rowIds(r));
-    const drawAll = (rs, first) => (collapsed ? rs.map(draw) : this.groupedRows(rs, t, first));
+    const drawAll = (rs, m) => (collapsed ? rs.map(draw) : this.groupedRows(rs, t, m));
     const remote = [
       ...new Set([
         ...rows.map((r) => r.w.machine).filter(Boolean),
@@ -533,14 +547,16 @@ export class Spaces {
     if (!remote.length) {
       return this.machineLoading(null) && !rows.length
         ? [this.own(this.loadingRow(null, t, collapsed), [])]
-        : drawAll(rows, true);
+        : drawAll(rows, null);
     }
     return [null, ...remote].flatMap((m) => {
       const mine = rows.filter((r) => (r.w.machine ?? null) === m);
       const folded = this.folded.has(m);
-      const head = this.own(this.machineHeader(m, t, collapsed), folded ? mine.flatMap((r) => this.rowIds(r)) : []);
-      if (folded) return [head];
-      if (mine.length) return [head, ...drawAll(mine, m === null)];
+      const ids = mine.flatMap((r) => this.rowIds(r));
+      const head = this.own(this.machineHeader(m, t, collapsed, ids), folded ? ids : []);
+      const hint = this.dragging && this.blocked === m && !collapsed ? [this.own(this.blockedHint(m, t), [])] : [];
+      if (folded) return [head, ...hint];
+      if (mine.length) return [head, ...hint, ...drawAll(mine, m)];
       const placeholder = this.machineLoading(m)
         ? this.loadingRow(m, t, collapsed)
         : this.newSpaceRow(m, t, collapsed);
@@ -556,81 +572,276 @@ export class Spaces {
     const seen = new Map();
     for (const w of spaces()) {
       const g = this.git[checkoutKey(w, ps)];
-      if (!g?.repo) continue;
+      if (!g?.repo) {
+        if (this.shown.has(w.id)) seen.set(`space:${w.id}`, { key: `space:${w.id}`, name: w.machine ? `${w.name} (${w.machine})` : w.name });
+        continue;
+      }
       const label = w.machine ? `${g.name} (${w.machine})` : g.name;
       if (!seen.has(g.repo) || !g.linked) seen.set(g.repo, { key: g.repo, name: label });
     }
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // Rows under your groups, in your group order; projects in no group follow without a label. Empty groups
-  // show in the first machine section only, so a new group has somewhere to appear.
-  groupedRows(rows, t, first) {
+  // Going to a space (a key, a click, agent.next) opens what hides it: its machine, folder and repo.
+  reveal(id, cx) {
+    const w = spaces().find((x) => x.id === id);
+    if (!w) return;
+    const m = w.machine ?? null;
+    let changed = false;
+    if (this.folded.delete(m)) {
+      localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
+      changed = true;
+    }
+    const key = this.unitKey?.[id];
+    const s = readGroups();
+    const group = key && s.projects[key];
+    if (group && s.groups.some((g) => g.id === group) && isFolded(s, group, m)) setFold(group, m, false);
+    const g = this.git[checkoutKey(w, panes())];
+    if (g?.linked && this.reposFolded.delete(g.repo)) {
+      localStorage.setItem("repos.folded", JSON.stringify([...this.reposFolded]));
+      changed = true;
+    }
+    if (changed) cx.notify();
+  }
+
+  // A space's folder unit: its repo (worktrees go with their repo), or the space itself.
+  keyOf(r) {
+    return r.g?.repo ?? `space:${r.w.id}`;
+  }
+
+  focusedMachine() {
+    return spaces().find((s) => s.id === focused()?.space)?.machine ?? null;
+  }
+
+  // The machine a drag started on; undefined while nothing is dragged.
+  dragMachine() {
+    return this.pressed == null ? undefined : (spaces()[this.pressed]?.machine ?? null);
+  }
+
+  // Machines holding a folder's open units.
+  groupMachines(id) {
+    const { projects } = readGroups();
+    const at = this.unitMachine ?? {};
+    return [...new Set(Object.keys(projects).filter((k) => projects[k] === id && k in at).map((k) => at[k]))];
+  }
+
+  // Folders under machine m: those holding its units, and an empty one under the machine it was made on.
+  shownGroups(m) {
     const { groups, projects } = readGroups();
+    const at = this.unitMachine ?? {};
+    return groups.filter((g) => {
+      const keys = Object.keys(projects).filter((k) => projects[k] === g.id && k in at);
+      return keys.some((k) => at[k] === m) || (!keys.length && (g.home ?? null) === m);
+    });
+  }
+
+  // A machine's rows under its folders, in folder order; Unfiled follows. While one of its
+  // spaces is dragged, a zone at the end makes a new folder with it.
+  groupedRows(rows, t, m) {
+    const s = readGroups();
     const draw = (r) => this.own(this.row(r, t), this.rowIds(r));
-    if (!groups.length) return rows.map(draw);
+    const shown = this.shownGroups(m);
     const units = [];
     for (const r of rows) {
       if (r.tree && units.length) units[units.length - 1].rows.push(r);
-      else units.push({ key: r.g?.repo ?? null, rows: [r] });
+      else units.push({ key: this.keyOf(r), rows: [r] });
     }
+    const dragging = this.dragging && this.dragMachine() === m;
     const out = [];
-    for (const group of groups) {
-      const mine = units.filter((u) => u.key && projects[u.key] === group.id).flatMap((u) => u.rows);
-      if (!mine.length && !first) continue;
+    for (const group of shown) {
+      const mine = units.filter((u) => s.projects[u.key] === group.id).flatMap((u) => u.rows);
+      const folded = isFolded(s, group.id, m);
+      const tag = `${group.id}@${m ?? "local"}`;
       const tint = groupTint(t, group.color);
-      // The header and its projects share one block, tinted with the group's color.
-      const sub = group.folded ? null : { head: `ghead-${group.id}`, rows: mine.map((r) => ({ key: `grow-${r.w.id}`, ids: this.rowIds(r) })) };
-      out.push(this.own(v_flex().id(`group-block-${group.id}`).flex_none().mt(4).rounded(9)
-        .when(Boolean(tint), (el) => el.bg(tint).pb(group.folded ? 0 : 4))
-        .child(this.sized(this.groupHeader(group, mine.length, t), `ghead-${group.id}`))
-        .when(!group.folded, (el) => el.child(mine.length
+      const ids = mine.flatMap((r) => this.rowIds(r));
+      // The header and its projects share one block, tinted with the folder's color.
+      const sub = folded ? null : { head: `ghead-${tag}`, rows: mine.map((r) => ({ key: `grow-${r.w.id}`, ids: this.rowIds(r) })) };
+      out.push(this.own(v_flex().id(`group-block-${tag}`).flex_none().mt(4).rounded(9)
+        .when(Boolean(tint), (el) => el.bg(tint).pb(folded ? 0 : 4))
+        .child(this.sized(this.groupHeader(group, m, ids, folded, shown, t), `ghead-${tag}`))
+        .when(!folded, (el) => el.child(mine.length
           ? v_flex().flex_none().pl(16).children(mine.map((r) => this.sized(this.row(r, t), `grow-${r.w.id}`)))
-          : this.emptyGroupRow(group, t))), mine.flatMap((r) => this.rowIds(r)), sub));
+          : this.emptyGroupRow(group, m, t))), ids, sub));
     }
-    const rest = units.filter((u) => !u.key || !groups.some((g) => g.id === projects[u.key]));
-    out.push(...rest.flatMap((u) => u.rows).map(draw));
+    const rest = units.filter((u) => !shown.some((g) => g.id === s.projects[u.key])).flatMap((u) => u.rows);
+    // Loose spaces sit beside the folders; only a drag shows where to take one out.
+    if (shown.length && dragging) out.push(this.own(this.unfiledRow(m, t), []));
+    out.push(...rest.map(draw));
+    if (dragging) out.push(this.own(this.newFolderZone(m, t), []));
     return out;
   }
 
-  groupHeader(group, count, t) {
+  groupHeader(group, m, ids, folded, shown, t) {
+    const tag = `${group.id}@${m ?? "local"}`;
+    const target = this.isTarget({ group: group.id, m });
+    const others = this.groupMachines(group.id).filter((x) => x !== m).map((x) => x ?? "This computer");
+    const summary = folded && inlineAgents() ? this.agents.folderSummary(ids, t) : null;
     return h_flex()
-      .id(`group-${group.id}`)
+      .id(`group-${tag}`)
       .h(30)
       .flex_none()
-      .pl(8)
+      .pl(6)
       .pr(4)
-      .gap(8)
+      .gap(7)
       .items_center()
       .rounded(7)
       .cursor_pointer()
-      .hover((s) => s.bg(t.hover))
-      .on_click(() => toggleFold(group.id))
-      .on_mouse_down("right", () => openGroupMenu(group.id, this.knownProjects()))
-      .child(Icon("folder", 15).text_color(t.muted))
-      .child(div().flex_1().min_w(0).truncate().font_semibold().text_color(t.foreground).child(group.name))
-      .child(div().text_size(TEXT.caption).text_color(t.dim).child(String(count)))
-      .child(IconButton({ id: `group-add-${group.id}`, icon: "plus", label: "Add projects", iconSize: 13, muted: true,
-        onClick: () => openProjectPicker(group.id, this.knownProjects()) }))
-      .child(IconButton({ id: `group-menu-${group.id}`, icon: "ellipsis", label: "Group options", iconSize: 13, muted: true,
-        onClick: () => openGroupMenu(group.id, this.knownProjects()) }))
-      .child(Icon(`chevron-${group.folded ? "right" : "down"}`, 12).text_color(t.dim));
+      .when(target, (el) => el.bg(t.accent + "33").border_1().border_color(t.accent))
+      .when(!target, (el) => el.hover((s) => s.bg(t.hover)))
+      // A double-click renames: its second click puts the fold back first.
+      .on_click((e) => {
+        toggleFold(group.id, m);
+        if (e.click_count === 2) openNameDialog(group.id);
+      })
+      .on_mouse_down("right", () => this.groupMenu(group, m, shown))
+      .on_mouse_move((_e, cx) => this.dragOver({ group: group.id, m }, m, cx, folded))
+      .on_mouse_up("left", (_e, cx) => this.dropOn({ group: group.id, m }, cx))
+      .child(Icon(`chevron-${folded ? "right" : "down"}`, 12).text_color(t.dim))
+      .child(Icon("folder", 15).text_color((group.color && t[group.color]) || t.muted))
+      .child(div().min_w(0).truncate().font_semibold().text_color(t.foreground)
+        .tooltip(others.length ? `${group.name} · also on ${others.join(", ")}` : group.name).child(group.name))
+      .child(div().flex_1())
+      .when(Boolean(summary), (el) => el.child(summary))
+      .child(div().flex_none().text_size(TEXT.caption).text_color(t.dim).child(String(ids.length)))
+      .child(IconButton({ id: `group-menu-${tag}`, icon: "ellipsis", label: "Folder options", iconSize: 13, muted: true,
+        onClick: () => this.groupMenu(group, m, shown) }));
   }
 
-  emptyGroupRow(group, t) {
+  groupMenu(group, m, shown) {
+    openGroupMenu(group.id, this.knownProjects(), m, shown.map((g) => g.id));
+  }
+
+  emptyGroupRow(group, m, t) {
+    const target = this.isTarget({ group: group.id, m });
     return div()
-      .id(`group-empty-${group.id}`)
+      .id(`group-empty-${group.id}@${m ?? "local"}`)
       .h(26)
       .flex_none()
-      .pl(31)
+      .mx(4)
+      .pl(27)
       .flex()
       .items_center()
+      .rounded(6)
       .text_size(TEXT.small)
-      .text_color(t.dim)
+      .text_color(target ? t.foreground : t.dim)
+      .when(target, (el) => el.border_1().border_color(t.accent))
       .cursor_pointer()
       .hover((s) => s.text_color(t.foreground))
       .on_click(() => openProjectPicker(group.id, this.knownProjects()))
-      .child("Add projects…");
+      .on_mouse_move((_e, cx) => this.dragOver({ group: group.id, m }, m, cx))
+      .on_mouse_up("left", (_e, cx) => this.dropOn({ group: group.id, m }, cx))
+      .child(this.dragging ? "Drop it here" : "Empty · drag a space here");
+  }
+
+  unfiledRow(m, t) {
+    const target = this.isTarget({ unfiled: true, m });
+    return h_flex()
+      .id(`unfiled-${m ?? "local"}`)
+      .h(30)
+      .mt(8)
+      .mb(2)
+      .px(10)
+      .flex_none()
+      .items_center()
+      .rounded(8)
+      .text_size(TEXT.small)
+      .border_1()
+      .border_dashed()
+      .border_color(target ? t.accent : t.input)
+      .text_color(target ? t.foreground : t.muted)
+      .when(target, (el) => el.bg(t.accent + "1f"))
+      .on_mouse_move((_e, cx) => this.dragOver({ unfiled: true, m }, m, cx))
+      .on_mouse_up("left", (_e, cx) => this.dropOn({ unfiled: true, m }, cx))
+      .child(div().flex_1().child("Drop here to take it out of its folder"));
+  }
+
+  newFolderZone(m, t) {
+    const target = this.isTarget({ fresh: true, m });
+    return h_flex()
+      .id(`new-folder-${m ?? "local"}`)
+      .h(38)
+      .mt(10)
+      .flex_none()
+      .gap(8)
+      .items_center()
+      .justify_center()
+      .rounded(8)
+      .border_1()
+      .border_dashed()
+      .border_color(target ? t.accent : t.input)
+      .when(target, (el) => el.bg(t.accent + "1f"))
+      .text_size(TEXT.small)
+      .text_color(target ? t.foreground : t.muted)
+      .on_mouse_move((_e, cx) => this.dragOver({ fresh: true, m }, m, cx))
+      .on_mouse_up("left", (_e, cx) => this.dropOn({ fresh: true, m }, cx))
+      .child(Icon("folder-plus", 14))
+      .child("Drop to make a new folder");
+  }
+
+  // Shown under a machine while a space from another machine is dragged over it.
+  blockedHint(m, t) {
+    const from = this.dragMachine() ?? "This computer";
+    const name = spaces()[this.pressed]?.name ?? "This space";
+    return div()
+      .id(`blocked-${m ?? "local"}`)
+      .flex_none()
+      .mx(4)
+      .my(3)
+      .px(10)
+      .py(6)
+      .rounded(7)
+      .border_1()
+      .border_dashed()
+      .border_color(t.ansi1 + "88")
+      .bg(t.ansi1 + "1a")
+      .text_size(TEXT.caption)
+      .text_color(t.ansi1)
+      .child(`${name} lives on ${from}. It can only be filed under ${from}.`);
+  }
+
+  isTarget(target) {
+    return Boolean(this.dragging) && JSON.stringify(this.target) === JSON.stringify(target);
+  }
+
+  // A drag over a folder header, Unfiled or the new-folder zone. Another machine's
+  // section refuses it; a folded folder opens after a moment.
+  dragOver(target, m, cx, folded = false) {
+    if (this.pressed == null) return;
+    const ok = this.dragMachine() === m;
+    const next = ok ? target : null;
+    const blocked = ok ? null : m;
+    if (this.dragging && JSON.stringify(next) === JSON.stringify(this.target) && this.blocked === blocked && this.over === null) return;
+    this.target = next;
+    this.blocked = blocked;
+    this.over = null;
+    this.dragging = true;
+    if (ok && folded && target.group) {
+      const want = JSON.stringify(target);
+      cx.timer.after(650, (cx) => {
+        if (JSON.stringify(this.target) !== want || !isFolded(readGroups(), target.group, m)) return;
+        setFold(target.group, m, false);
+        cx.notify();
+      });
+    }
+    cx.notify();
+  }
+
+  dropOn(target, cx) {
+    if (this.pressed == null || !this.isTarget(target)) return;
+    const key = this.unitKey?.[spaces()[this.pressed]?.id];
+    if (key && target.group) fileUnder(key, target.group);
+    else if (key && target.unfiled) fileUnder(key, null);
+    else if (key && target.fresh) openNameDialog(newGroupWith(key, target.m), target.m);
+    this.endDrag();
+    cx.notify();
+  }
+
+  endDrag() {
+    this.pressed = null;
+    this.over = null;
+    this.target = null;
+    this.blocked = null;
+    this.dragging = false;
   }
 
   // A new space starts at its machine's home, never in the focused terminal's folder:
@@ -677,7 +888,8 @@ export class Spaces {
       .when(!collapsed, (el) => el.child("New space there"));
   }
 
-  machineHeader(m, t, collapsed) {
+  // Each machine is its own section: a bold bar, ruled off from the machine above.
+  machineHeader(m, t, collapsed, ids = []) {
     const machine = this.machines.find((k) => k.name === m);
     const connected = !m || machine?.state === "connected";
     const head = h_flex()
@@ -691,6 +903,7 @@ export class Spaces {
       .text_color(t.dim)
       .cursor_pointer()
       .hover((s) => s.bg(t.hover))
+      .on_mouse_move((_e, cx) => this.dragOver({ machine: true, m }, m, cx))
       .on_click((_e, cx) => {
         if (!this.folded.delete(m)) this.folded.add(m);
         localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
@@ -698,43 +911,44 @@ export class Spaces {
       })
       .child(Icon(m ? "server" : "monitor", 13));
     if (collapsed) return head;
-    return head
-      .child(
-        div()
-          .flex_1()
-          .truncate()
-          .child(m ?? "This computer"),
-      )
-      .when(!connected, (el) =>
-        el.child(
-          div()
-            .flex_none()
-            .child((machine?.state ?? "asleep").replace(/_/g, " ")),
-        ),
-      )
-      .when(connected, (el) => el.child(this.machineAddButton(m, t)))
-      .child(
-        div()
-          .size(6)
-          .rounded(3)
-          .flex_none()
-          .bg(connected ? t.ansi2 : t.dim),
-      )
-      .child(Icon(`chevron-${this.folded.has(m) ? "right" : "down"}`, 11));
-  }
-
-  machineAddButton(m, t) {
-    return div()
-      .id(`machine-add-${m ?? "local"}`)
+    const folded = this.folded.has(m);
+    const summary = folded && inlineAgents() ? this.agents.folderSummary(ids, t) : null;
+    // Laid out like a folder header (chevron first), a step bolder; the dot is green while connected.
+    const bar = h_flex()
+      .id(`machine-${m ?? "local"}`)
+      .h(30)
       .flex_none()
-      .px(4)
-      .rounded(4)
-      .hover((s) => s.bg(t.hover).text_color(t.foreground))
+      .pl(6)
+      .pr(2)
+      .gap(7)
+      .items_center()
+      .rounded(7)
+      .cursor_pointer()
+      .hover((s) => s.bg(t.hover))
+      .on_mouse_move((_e, cx) => this.dragOver({ machine: true, m }, m, cx))
       .on_click((_e, cx) => {
-        cx.stop_propagation();
-        this.newSpace(m);
+        if (!this.folded.delete(m)) this.folded.add(m);
+        localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
+        cx.notify();
       })
-      .child("+");
+      .child(Icon(`chevron-${folded ? "right" : "down"}`, 12).text_color(t.dim))
+      .child(Icon(m ? "server" : "monitor", 14).text_color(t.muted))
+      .child(div().flex_1().min_w(0).truncate().font_semibold().text_color(t.foreground).child(m ?? "This computer"))
+      .when(Boolean(summary), (el) => el.child(summary))
+      .when(!connected, (el) =>
+        el.child(div().flex_none().text_size(TEXT.caption).text_color(t.dim).child((machine?.state ?? "asleep").replace(/_/g, " "))),
+      )
+      .when(folded, (el) => el.child(div().flex_none().text_size(TEXT.caption).text_color(t.dim).child(String(ids.length))))
+      .child(div().size(6).mx(2).rounded(3).flex_none().bg(connected ? t.ansi2 : t.dim)
+        .tooltip(connected ? "Connected" : (machine?.state ?? "asleep").replace(/_/g, " ")))
+      .when(connected, (el) => el.child(IconButton({ id: `machine-add-${m ?? "local"}`, icon: "plus", label: `New space on ${m ?? "this computer"}`,
+        iconSize: 13, muted: true, onClick: () => this.newSpace(m) }).size(22)));
+    // One rule between machines; none above the first.
+    return v_flex()
+      .id(`machine-section-${m ?? "local"}`)
+      .flex_none()
+      .when(m !== null, (el) => el.child(div().h(1).mx(4).mt(10).mb(6).bg(t.border)))
+      .child(bar);
   }
 
   // ── Branch and PR descriptions ───────────────────────────────────────────
@@ -1115,21 +1329,34 @@ export class Spaces {
         this.over = i;
       })
       .on_mouse_move((_e, cx) => {
+        if (this.pressed == null) return;
         const source = spaces()[this.pressed];
-        const over = source && (source.machine ?? null) === (w.machine ?? null) ? i : null;
-        if (this.pressed !== null && this.over !== over) {
-          this.over = over;
-          cx.notify();
-        }
+        const ok = source && (source.machine ?? null) === (w.machine ?? null);
+        const over = ok ? i : null;
+        const blocked = ok ? null : (w.machine ?? null);
+        if (this.over === over && this.blocked === blocked && !this.target) return;
+        this.over = over;
+        this.blocked = blocked;
+        this.target = null;
+        if (i !== this.pressed) this.dragging = true;
+        cx.notify();
       })
       .on_mouse_up("left", (_e, cx) => {
         const from = this.pressed;
         const over = this.over;
-        this.pressed = null;
-        this.over = null;
-        if (from !== null && over === i && from !== i)
-          run("space.move", { id: spaces()[from].id, index: i + 1 });
-        else if (from === i) run("space.select", { id: w.id });
+        if (from != null && over === i && from !== i) {
+          const source = spaces()[from];
+          run("space.move", { id: source.id, index: i + 1 });
+          // Dropped beside a row, it joins that row's folder (or Unfiled).
+          const key = this.unitKey?.[source.id];
+          const there = this.unitKey?.[w.id];
+          if (key && there && key !== there) {
+            const { groups, projects } = readGroups();
+            const group = groups.some((g) => g.id === projects[there]) ? projects[there] : null;
+            if ((projects[key] ?? null) !== group) fileUnder(key, group);
+          }
+        } else if (from === i && !this.dragging) run("space.select", { id: w.id });
+        this.endDrag();
         cx.notify();
       });
   }
@@ -1299,10 +1526,10 @@ export class Spaces {
                   IconButton({
                     id: "group-new",
                     icon: "folder-plus",
-                    label: "New group",
+                    label: "New folder",
                     iconSize: 14,
                     muted: true,
-                    onClick: () => openNameDialog(),
+                    onClick: () => openNameDialog(null, this.focusedMachine()),
                   }),
                 ),
               )
@@ -1313,7 +1540,7 @@ export class Spaces {
                   label: "New space",
                   iconSize: 14,
                   muted: true,
-                  onClick: () => this.newSpace(spaces().find((s) => s.id === focused()?.space)?.machine ?? null),
+                  onClick: () => this.newSpace(this.focusedMachine()),
                 }),
               ),
           ),
@@ -1337,7 +1564,7 @@ export class Spaces {
             if (this.drag) this.scrollBy(this.drag.from + (e.position.y - this.drag.y) * this.drag.k - this.offset, cx);
           })
           .on_mouse_up("left", (_e, cx) => {
-            this.pressed = null;
+            this.endDrag();
             this.drag = null;
             cx.notify();
           })

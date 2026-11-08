@@ -38,21 +38,23 @@ export function subTree(all, addr, lead = []) {
 
 // Counts for a set of spaces: agents, sub-agents, how many need you, the most urgent state.
 export function tally(view, spaceIds) {
-  let count = 0, subs = 0, blocked = 0;
+  let count = 0, subs = 0, blocked = 0, working = 0;
   const statuses = [];
   for (const id of spaceIds)
     for (const a of view.bySpace.get(id) ?? []) {
       count++;
       statuses.push(a.status);
       if (a.status === "blocked") blocked++;
+      if (a.status === "working") working++;
       for (const s of subTree(view.all, a.address)) {
         const st = kidStatus(s.t, view.status);
         subs++;
         statuses.push(st);
         if (st === "blocked") blocked++;
+        if (st === "working") working++;
       }
     }
-  return { count, subs, blocked, top: urgent(statuses) };
+  return { count, subs, blocked, working, top: urgent(statuses) };
 }
 
 export class SpaceAgents {
@@ -122,6 +124,17 @@ export class SpaceAgents {
     const text = `${count} agent${count === 1 ? "" : "s"}${subs ? ` · ${subs} sub` : ""}`;
     return h_flex().flex_none().gap(5).items_center().text_size(TEXT.caption).text_color(t.muted)
       .child(text).child(statusMark(t, top));
+  }
+
+  // A folded folder's line: how many need you, then how many are working.
+  folderSummary(spaceIds, t) {
+    const { blocked, working } = tally(this.view, spaceIds);
+    if (!blocked && !working) return null;
+    return h_flex().flex_none().gap(6).items_center().text_size(TEXT.caption)
+      .when(blocked > 0, (el) => el.child(div().flex_none().px(5).py(1).rounded(4).bg(t.blocked + "26").text_color(t.blocked)
+        .font_semibold().child(`${blocked} need${blocked === 1 ? "s" : ""} you`)))
+      .when(working > 0, (el) => el.child(h_flex().flex_none().gap(4).items_center().text_color(t.working)
+        .child(Icon("spinner").size(11).flex_none().spin(900)).child(`${working} working`)));
   }
 
   toggle(addr, cx) {

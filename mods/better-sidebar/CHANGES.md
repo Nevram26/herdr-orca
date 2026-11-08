@@ -8,7 +8,13 @@ Modified files:
 - `main.js`: registers the `card` and `groups` views.
 - `views/spaces.js`: issue badges beside PR badges, both opening the issues mod's viewer;
   a live-ports plug icon on the branch line; the hover card; repo-row hover buttons
-  (fold worktrees, menu, new worktree); project groups; the space menu is `my-menu`;
+  (fold worktrees, menu, new worktree); one section per machine (bold bar, green dot while connected, a
+  rule between machines); folders (`views/groups.js`): any space or repo can be filed, by dragging
+  it onto a folder header, beside a row in another folder, onto the take-out or new-folder targets
+  shown while dragging, or from the space menu's "Move to folder…"; folders are shared by every
+  machine but show under a machine only when they hold its spaces, fold per machine, sum their
+  agents when folded, and a drag never leaves its machine; going to a space opens its machine,
+  folder and repo; the space menu is `my-menu`;
   agents and their sub-agent trees drawn under each space (header "Agents" switch, which
   hides the Agents panel), the fold chevron hides a space's worktrees and agents together;
   a moon and "Asleep" on a space the hibernate mod put to sleep; every + (Spaces, a machine's
