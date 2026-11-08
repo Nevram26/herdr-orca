@@ -238,6 +238,13 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   compare paths in one spelling. The meter uses `procs.ps1` (CRLF output); ports use `netstat` and
   match by process ancestry, since Windows can't read another process's folder. Git Bash FIFOs
   don't reach native programs: the usage helpers pipe instead.
+- Hibernate on Windows: herdr-core names the shell as a terminal's foreground even while it runs a
+  program, so `core.js` takes the shell's child (not `conhost`/`OpenConsole`) from one process list
+  per second; Codex runs as `node …\codex.js` and counts as `codex`. Stop is ctrl+c (`hc
+  interrupt`; PowerShell stays, there's no zsh launcher), then `taskkill /T /F`. Wake types
+  `Set-Location -LiteralPath '…'; if ($?) { & '…' }` (no `&&` in PowerShell 5.1). Codex's session
+  is the newest rollout whose first line has this `"cwd"`. A killed shell ends its terminal there,
+  so the restart offer only follows a real core loss or reboot.
 
 ## Done when
 

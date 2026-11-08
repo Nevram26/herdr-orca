@@ -2,7 +2,7 @@
 // or core loss. Docked in a 0px block; as an overlay (props.view) it draws its dialogs.
 
 import { View, div } from "gpui-kit";
-import { spaces, machines, shared, setShared, notify, openOverlay, closeOverlay, appHome, props, focused, nextCommand, exec, readTextFile, writeTextFile } from "herdr";
+import { spaces, machines, shared, setShared, notify, openOverlay, closeOverlay, appHome, props, focused, nextCommand, exec, readTextFile, writeTextFile, window } from "herdr";
 import * as fs from "fs/promises";
 import { get, list, describe, idleShell, start, stop, commandLine } from "./core.js";
 import { SleepDialog, ResumeDialog } from "./ui.js";
@@ -107,9 +107,15 @@ export default class Hibernate extends View {
 
   // Herdr's own start time marks a new launch, so a reload of this mod isn't one.
   async noteLaunch() {
-    const r = await exec("ps", ["-axo", "lstart=,comm="]).catch(() => null);
-    const line = (r?.stdout ?? "").split("\n").map((l) => l.trim()).find((l) => /\/Herdr\.app\/Contents\/MacOS\/Herdr$/.test(l));
-    const launch = line ? line.replace(/\s+\/.*$/, "") : null;
+    let launch = null;
+    if (window()?.platform === "windows") {
+      const r = await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "(Get-Process herdr-app | Sort-Object StartTime | Select-Object -First 1).StartTime.ToString('o')"]).catch(() => null);
+      launch = r?.stdout.trim() || null;
+    } else {
+      const r = await exec("ps", ["-axo", "lstart=,comm="]).catch(() => null);
+      const line = (r?.stdout ?? "").split("\n").map((l) => l.trim()).find((l) => /\/Herdr\.app\/Contents\/MacOS\/Herdr$/.test(l));
+      launch = line ? line.replace(/\s+\/.*$/, "") : null;
+    }
     if (!launch || launch === this.state.launch) return;
     this.state.launch = launch;
     await this.save();
@@ -160,7 +166,7 @@ export default class Hibernate extends View {
 
   async sleep(cx, id, confirmed) {
     const space = spaces().find((s) => s.id === id);
-    if (!space || space.machine || !local(id)) return notify({ title: "Sleep works on this Mac's spaces only", level: "warning" });
+    if (!space || space.machine || !local(id)) return notify({ title: "Sleep works on this computer's spaces only", level: "warning" });
     if (this.state.sleeping[id]) return;
     const entries = (await Promise.all((await this.spaceTerminals(space)).map(describe))).filter(Boolean);
     if (!entries.some((e) => !e.parent)) return notify({ title: `Nothing running in ${space.name}`, level: "info" });

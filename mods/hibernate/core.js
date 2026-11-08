@@ -1,18 +1,52 @@
 // What runs in a terminal, how to stop it, and how to start it again.
-import { hc, exec, home, readTextFile } from "herdr";
+import { hc, exec, home, readTextFile, window } from "herdr";
 
-const SHELLS = new Set(["zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu", "xonsh", "pwsh", "login"]);
-const base = (s) => String(s ?? "").split("/").pop().replace(/^-/, "");
+const SHELLS = new Set(["zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu", "xonsh", "pwsh", "powershell", "cmd", "login"]);
+// Either slash; Windows names lose ".exe".
+const base = (s) => String(s ?? "").split(/[\\/]/).pop().replace(/^-/, "").replace(/\.exe$/i, "");
 const isShell = (s) => SHELLS.has(base(s));
+const windows = () => window()?.platform === "windows";
+// A PowerShell string literal (it also takes curly quotes as quotes).
+const psq = (s) => `'${String(s).replace(/['‘’‚‛]/g, "$&$&")}'`;
+const powershell = (script) => exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script]);
+
+// Windows: one process list for every call made within a second (a pass reads all terminals at once).
+let snapshot = null;
+function processes() {
+  if (snapshot && Date.now() - snapshot.at < 1000) return snapshot.list;
+  const list = powershell("[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name,CommandLine | Select-Object ProcessId,ParentProcessId,Name,CommandLine)")
+    .then((r) => JSON.parse(r.stdout))
+    .catch(() => []);
+  snapshot = { at: Date.now(), list };
+  return list;
+}
+
+// A Windows command line as argv. An agent behind a launcher (node codex.js, cmd /c codex.cmd)
+// counts as that agent: ["codex", ...its arguments].
+function argvOf(line) {
+  const argv = (String(line ?? "").match(/(?:[^\s"]+|"[^"]*")+/g) ?? []).map((s) => s.replace(/"/g, ""));
+  const agent = (a) => base(a).replace(/\.(js|cmd|ps1)$/i, "");
+  const i = argv.findIndex((a, j) => j > 0 && ["claude", "codex"].includes(agent(a)));
+  return i > 0 ? [agent(argv[i]), ...argv.slice(i + 1)] : argv;
+}
 
 export async function get(address) {
   const r = await hc(["get", "--json", address]).catch(() => null);
   if (!r || r.code !== 0) return null;
+  let g;
   try {
-    return JSON.parse(r.stdout);
+    g = JSON.parse(r.stdout);
   } catch {
     return null;
   }
+  // Windows: the core names the shell as the foreground even while it runs a program,
+  // so that program is the shell's child (not its console host).
+  const f = g.foreground;
+  if (windows() && g.state === "live" && f?.pid === g.pid && isShell(f.argv?.[0] ?? f.name)) {
+    const kid = (await processes()).find((p) => p.ParentProcessId === g.pid && !/^(conhost|OpenConsole)\.exe$/i.test(p.Name));
+    if (kid) g.foreground = { pid: kid.ProcessId, name: kid.Name, argv: argvOf(kid.CommandLine), cwd: f.cwd };
+  }
+  return g;
 }
 
 export async function list() {
@@ -52,7 +86,13 @@ async function claudeSession(pid) {
 }
 
 // Codex keeps its rollout file open; its name ends with the session id.
-async function codexSession(pid) {
+// Windows has no lsof: the newest rollout whose first line names this folder.
+async function codexSession(pid, cwd) {
+  if (windows()) {
+    const needle = `"cwd":${JSON.stringify(cwd)}`;
+    const r = await powershell(`Get-ChildItem -LiteralPath ${psq(`${home()}/.codex/sessions`)} -Recurse -Filter 'rollout-*.jsonl' | Sort-Object LastWriteTime -Descending | Select-Object -First 200 | Where-Object { (Get-Content -LiteralPath $_.FullName -TotalCount 1).IndexOf(${psq(needle)}, [StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object -First 1 -ExpandProperty Name`).catch(() => null);
+    return (r?.stdout ?? "").match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl/)?.[1] ?? null;
+  }
   const kids = await exec("pgrep", ["-P", String(pid)]).catch(() => null);
   const pids = [String(pid), ...(kids?.stdout ?? "").split(/\s+/).filter(Boolean)];
   const r = await exec("lsof", ["-p", pids.join(","), "-Fn"]).catch(() => null);
@@ -65,7 +105,7 @@ export async function describe(g) {
   const f = program(g);
   if (!f) return null;
   const k = kind(g, f);
-  const session = k === "claude" ? await claudeSession(f.pid) : k === "codex" ? await codexSession(f.pid) : null;
+  const session = k === "claude" ? await claudeSession(f.pid) : k === "codex" ? await codexSession(f.pid, f.cwd || g.cwd) : null;
   return {
     address: g.address,
     shellPid: g.pid,
@@ -103,12 +143,17 @@ export function resumeArgv(e) {
 }
 
 const q = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`);
-export const commandLine = (e) => `cd ${q(e.cwd)} && ${resumeArgv(e).map(q).join(" ")}`;
+// What to type into `shell`. PowerShell (Herdr's shell on Windows) has no && in 5.1.
+export const commandLine = (e, shell = windows() ? "powershell" : "sh") =>
+  shell === "powershell" || shell === "pwsh"
+    ? `Set-Location -LiteralPath ${psq(e.cwd)}; if ($?) { & ${resumeArgv(e).map(psq).join(" ")} }`
+    : `cd ${q(e.cwd)} && ${resumeArgv(e).map(q).join(" ")}`;
 
 // Starts an entry again in its idle shell; never types into a busy one.
 export async function start(e) {
   const g = await get(e.address);
   let address = e.address;
+  let shell; // a new terminal gets this machine's default shell
   if (!g || g.state !== "live") {
     if (!e.space || !e.tab) return false;
     // Its terminal is gone: a new shell in the same tab.
@@ -120,7 +165,8 @@ export async function start(e) {
     }
     if (!address) return false;
   } else if (!idleShell(g)) return false;
-  const r = await hc(["send", address, commandLine(e)]).catch(() => null);
+  else shell = base(g.foreground.argv?.[0] ?? g.foreground.name);
+  const r = await hc(["send", address, commandLine(e, shell)]).catch(() => null);
   return r?.code === 0;
 }
 
@@ -135,10 +181,12 @@ async function waitIdle(cx, address, ms) {
 
 // SIGTERM to the program's process group: ctrl+c (SIGINT) makes Herdr's launcher
 // shell (zsh -lic '"$@"; exec "$0" -li') abort instead of returning to its prompt.
+// Windows has neither signals nor that launcher: ctrl+c, and PowerShell stays.
 async function term(address) {
   const g = await get(address);
   const f = program(g);
   if (!f || f.pid === g.pid) return;
+  if (windows()) return void (await hc(["interrupt", address, "--timeout", "5"]).catch(() => null));
   const r = await exec("kill", ["-TERM", `-${f.pid}`]).catch(() => null);
   if (r?.code !== 0) await exec("kill", ["-TERM", String(f.pid)]).catch(() => null);
 }
@@ -154,6 +202,6 @@ export async function stop(cx, e) {
   if (await waitIdle(cx, e.address, 5000)) return true;
   const g = await get(e.address);
   const f = program(g);
-  if (f && f.pid !== g.pid) await exec("kill", ["-KILL", `-${f.pid}`]).catch(() => null);
+  if (f && f.pid !== g.pid) await (windows() ? exec("taskkill", ["/PID", String(f.pid), "/T", "/F"]) : exec("kill", ["-KILL", `-${f.pid}`])).catch(() => null);
   return waitIdle(cx, e.address, 3000);
 }

@@ -72,10 +72,11 @@ tested on macOS with Herdr 0.1.13, and on Windows 11 (see [Windows](#windows)).
   the space whose terminal started the server, so one started outside Herdr is listed under Other
   processes, even inside a worktree.
 - Setup scripts and clones run in Git's `sh` and then leave you in PowerShell.
-- Not on Windows yet: Sleep and Wake (and resuming agents after a restart), desktop notifications,
-  pasting an issue's task into Claude (it's copied to the clipboard instead, so press Ctrl+V), the
-  Files panel's Open with menu, Excalidraw's undo and redo keys, and Automations (no
-  `herdr-automations` for Windows).
+- Sleep and Wake type the resume command into PowerShell. Resuming after a restart is offered after
+  a reboot, a logout or a herdr-core crash: on Windows a terminal whose shell is killed just closes.
+- Not on Windows yet: desktop notifications, pasting an issue's task into Claude (it's copied to the
+  clipboard instead, so press Ctrl+V), the Files panel's Open with menu, Excalidraw's undo and redo
+  keys, and Automations (no `herdr-automations` for Windows).
 
 ## Updating this repo
 
