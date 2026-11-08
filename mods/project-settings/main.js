@@ -12,8 +12,9 @@ export const projectKey = (machine, main) => JSON.stringify([machine ?? null, ma
 const GROUPS = "better-sidebar.groups";
 const COLORS = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b7cf6", ansi2: "#3fae6a", ansi1: "#d9649a" };
 const ICONS = [["auto", "Automatic"], ["emoji", "Emoji"], ["letter", "Letter"]];
-const tilde = (p) => (p && p.startsWith(home()) ? `~${p.slice(home().length)}` : p ?? "");
-const expand = (p) => (p.startsWith("~/") ? home() + p.slice(1) : p);
+// Home as ~, whichever slashes (git says C:/Users/x where Windows says C:\Users\x).
+const tilde = (p) => (p && p.replace(/\\/g, "/").startsWith(home().replace(/\\/g, "/")) ? `~${p.slice(home().length)}` : p ?? "");
+const expand = (p) => p.replace(/^~(?=[\\/])/, home());
 
 // Where a space is now: its first terminal's live folder, else where it was made.
 function place(s) {

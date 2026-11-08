@@ -16,7 +16,8 @@ function icon(p, size, color) {
 function folder(cwd) {
   if (!cwd) return "";
   const h = home();
-  return cwd === h ? "~" : cwd.startsWith(h + "/") ? "~" + cwd.slice(h.length) : cwd;
+  // Windows says C:\Users\x: home's slashes are cwd's.
+  return cwd === h ? "~" : cwd.startsWith(h + "/") || cwd.startsWith(h + "\\") ? "~" + cwd.slice(h.length) : cwd;
 }
 
 export default class Pane extends View {

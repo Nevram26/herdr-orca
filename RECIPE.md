@@ -33,7 +33,9 @@ at 12,16 over the sidebar. The root background is `canvas`; terminals have 14×1
     while agents show in spaces, the Agents panel toggle, Add machine.
   - A space put to sleep shows a moon and **Asleep** on its second line.
 - **Tab bar** (42px): `my-tabs` pills for the space's tabs; a **▶ Dev | ▾** run button
-  (`t3-actions`, 108px); the right-panel toggle (36px).
+  (`t3-actions`, 108px); the right-panel toggle (36px); on Windows and Linux, the window's
+  minimize, maximize and close last (`my-tabs` with `part: "window"`, 104px, hidden until the bar
+  shows it).
 - **Main**: the active tab's panes as cards (radius 10, gap 8, 1px `border`, `accent` when focused,
   framed even when alone) with a 30px `my-pane` header: program icon, agent name, folder, status,
   and split/zoom/close on the right.
@@ -229,6 +231,13 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
 - `herdr.yaml` / `orca.yaml` are parsed only for `scripts.setup` (one line, or a `|` / `>` block),
   not as full YAML. `herdr.yaml` wins when both exist.
   The setup script also runs when Create opens an existing checkout that has no space open yet.
+- Windows: only `Git\cmd` is on PATH, so `sh`, `cp`, `find`, `mkdir` and the like go through Git's
+  `bin/sh.exe`, found from `git --exec-path` (`sh.js`, one identical copy per mod that needs it;
+  its Unix `find`/`sort` come before System32's). `convert` there is System32's disk converter, so
+  JPEG avatars go through System.Drawing. Git says `C:/x` where Herdr says `C:\x`, in any case:
+  compare paths in one spelling. The meter uses `procs.ps1` (CRLF output); ports use `netstat` and
+  match by process ancestry, since Windows can't read another process's folder. Git Bash FIFOs
+  don't reach native programs: the usage helpers pipe instead.
 
 ## Done when
 

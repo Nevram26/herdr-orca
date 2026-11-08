@@ -39,7 +39,43 @@ By hand:
 
 Needs `git` and a logged-in `gh`. Usage limits read the `claude` and `codex` CLIs; Automations uses
 the `herdr-automations` CLI; desktop notifications use `terminal-notifier` when installed. Built and
-tested on macOS with Herdr 0.1.13.
+tested on macOS with Herdr 0.1.13, and on Windows 11 (see [Windows](#windows)).
+
+## Windows
+
+- Needs [Git for Windows](https://gitforwindows.org); its default install is enough. The mods run
+  their shell helpers with its `sh.exe`, found through `git --exec-path`, so nothing has to be added
+  to `PATH`.
+- `keys.json` uses `cmd-`, which is the Windows key there, and Windows keeps most of those (Win+N,
+  Win+G, Win+W). Merge these instead. The `layout:orca` ones replace Herdr's own only while Orca
+  shows:
+
+  ```json
+  "global": {
+    "ctrl-shift-g": "mod.open:open-vscode",
+    "alt-shift-e": "mod.open:excalidraw",
+    "alt-shift-n": "mod.open:new-project"
+  },
+  "layout:orca": {
+    "ctrl-shift-n": "mod.open:new-worktree",
+    "ctrl-shift-a": "layout.toggle:agents",
+    "alt-shift-b": "better-sidebar.toggle-panel",
+    "ctrl-shift-pagedown": "better-sidebar.next-space",
+    "ctrl-shift-pageup": "better-sidebar.prev-space",
+    "ctrl-shift-w": "my-tabs.close-tab",
+    "ctrl-shift-x": "my-tabs.close-pane"
+  }
+  ```
+
+- Minimize, maximize and close sit at the right end of the tab bar.
+- The resource meter samples processes with PowerShell. Live ports come from `netstat` and belong to
+  the space whose terminal started the server, so one started outside Herdr is listed under Other
+  processes, even inside a worktree.
+- Setup scripts and clones run in Git's `sh` and then leave you in PowerShell.
+- Not on Windows yet: Sleep and Wake (and resuming agents after a restart), desktop notifications,
+  pasting an issue's task into Claude (it's copied to the clipboard instead, so press Ctrl+V), the
+  Files panel's Open with menu, Excalidraw's undo and redo keys, and Automations (no
+  `herdr-automations` for Windows).
 
 ## Updating this repo
 

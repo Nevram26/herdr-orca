@@ -135,7 +135,8 @@ export default class LivePorts extends View {
 
   // Kill, then drop it from the shared list; the next scan confirms.
   stop(p) {
-    exec("kill", [String(p.pid)]).catch(() => null);
+    // Windows has no SIGTERM for a console server: end it and the children it started.
+    (window()?.platform === "windows" ? exec("taskkill", ["/PID", String(p.pid), "/T", "/F"]) : exec("kill", [String(p.pid)])).catch(() => null);
     const d = data();
     const drop = (l) => l.filter((x) => x.pid !== p.pid);
     const bySpace = Object.fromEntries(Object.entries(d.bySpace).map(([k, l]) => [k, drop(l)]).filter(([, l]) => l.length));
