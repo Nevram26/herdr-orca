@@ -66,6 +66,8 @@ function items(p, git) {
         ...(git ? [["Project settings…", "project-settings", { space: tg.id }]] : []),
         ...(git ? [["New worktree", "worktree", { space: tg.id, action: "new" }], ["Open worktree", "worktree", { space: tg.id, action: "open" }]] : []),
         // hibernate mod: stop this Mac's space's programs, or start them again.
+        // better-sidebar's folders: a repo files with its worktrees, any other space by itself.
+        ["Move to folder…", "move-folder", { space: tg.id }],
         ...(tg.id && !tg.id.includes("/") ? [shared("hibernate.sleeping")?.[tg.id] ? ["Wake space", "hibernate", { action: "wake", space: tg.id }] : ["Sleep space", "hibernate", { action: "sleep", space: tg.id }]] : []),
         // A worktree space closes by removing its worktree (the dialog checks for unsaved work first).
         git === "linked" ? ["Close & remove worktree", "worktree", { space: tg.id, action: "remove" }] : ["Close", "space.close", { id: tg.id }],
@@ -88,7 +90,7 @@ const closes = (it) => it[0].startsWith("Close");
 function menuIcon(it) {
   const command = it[1];
   if (command === "hibernate") return `mods/hibernate/${it[2].action === "wake" ? "sun" : "moon"}.svg`;
-  const name = closes(it) ? "x" : command.endsWith(".rename") ? "square-pen" : command.endsWith(".new") ? "plus" : command === "worktree" ? "git-branch" : command === "app.help" ? "terminal" : command === "app.theme" || command === "project-settings" ? "settings" : command === "pane.split" ? "panel-right" : command === "pane.zoom" ? "square" : "terminal";
+  const name = closes(it) ? "x" : command.endsWith(".rename") ? "square-pen" : command.endsWith(".new") ? "plus" : command === "worktree" ? "git-branch" : command === "move-folder" ? "folder" : command === "app.help" ? "terminal" : command === "app.theme" || command === "project-settings" ? "settings" : command === "pane.split" ? "panel-right" : command === "pane.zoom" ? "square" : "terminal";
   return `mods/workspace-chrome/${name}.svg`;
 }
 
@@ -125,6 +127,13 @@ export default class Menu extends View {
     else if (it[1] === "worktree" && it[2].action === "remove") openOverlay({ mod: "my-worktree", kind: "dialog", width: 460, height: 300, props: it[2] });
     // New and open use the Create worktree dialog (new-worktree); open starts on its Branch tab.
     else if (it[1] === "worktree") openOverlay({ mod: "new-worktree", kind: "dialog", width: 560, height: 780, props: { space: it[2].space, ...(it[2].action === "open" ? { mode: "branch" } : {}) } });
+    else if (it[1] === "move-folder") {
+      const s = spaces().find((x) => x.id === it[2].space);
+      const key = shared("better-sidebar.space-parents")?.[it[2].space]?.key ?? `space:${it[2].space}`;
+      const count = (shared("better-sidebar.groups")?.groups ?? []).length;
+      openOverlay({ mod: "better-sidebar", kind: "popup", width: 260, height: Math.min(460, 112 + (count + 1) * 31),
+        props: { view: "groups", mode: "move", key, name: s?.name, machine: s?.machine ?? null } });
+    }
     else if (it[1] === "hibernate") setShared("hibernate.request", { nonce: Date.now(), ...it[2] });
     else run(it[1], it[2]);
   }

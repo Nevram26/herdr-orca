@@ -18,8 +18,10 @@ at 12,16 over the sidebar. The root background is `canvas`; terminals have 14×1
   - `brand` (46px): Herdr's `workspace-chrome` brand row.
   - `sidebar-nav` (101px): Orca-style links, **Automations**, **Issues** and **Mod settings**, each
     opening its mod as a popup (`automations`, `issues`, munza's `better-config`).
-  - **Spaces** (`better-sidebar`): projects by machine and by your own groups (tinted sections you
-    name and fill). A repo's main checkout lists its worktrees under it (`├─`/`└─` with a branch icon).
+  - **Spaces** (`better-sidebar`): one section per machine (a 30px bar: chevron, monitor or
+    server icon, bold name, a green dot while connected, **+**; a 1px rule above every machine but
+    the first), and inside it your **folders** (tinted blocks: chevron, colored folder icon, name,
+    count, **⋯**), then the spaces in no folder at the same indent. A repo's main checkout lists its worktrees under it (`├─`/`└─` with a branch icon).
     Each row has a second line: branch, `primary` badge on a main checkout, ↑/↓ when active, then a
     plug icon when it has live ports, the linked issue (green circle `#243`, purple when closed) and
     its PR (state icon `#453`, green open, red closed/failed, purple merged, grey draft).
@@ -62,7 +64,19 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   footer's orange "N need you" goes to the first agent that needs you. The collapsed rail shows no
   agent rows, only each space's status.
 - **Spaces**: click selects, drag reorders within a machine, right-click opens `my-menu`.
-  `cmd-alt-]` / `cmd-alt-[` step through spaces in the list's order (machines, your groups, repos
+- **Folders**: any space or repo (a repo with its worktrees) can be filed. Drag it onto a folder
+  header (highlighted; a folded one opens after 650ms), beside a row in another folder (it moves
+  and joins that folder), onto the dashed "Drop here to take it out of its folder" or "Drop to make
+  a new folder" targets that appear below the folders while dragging, or use the space menu's
+  **Move to folder…** (every folder, "new here" on ones this machine doesn't have yet, New folder
+  with it, Take out of folder). Folders are shared by every machine (one name, color and order)
+  but show under a machine only when they hold its spaces; an empty one shows under the machine it
+  was made on. Folding is per machine. A folded folder or machine shows "N needs you" and "N
+  working". A drag never leaves its machine: over another machine a red dashed note says it can
+  only be filed under its own. Double-click a folder to rename it; its **⋯** menu has colors,
+  Rename, Add projects, Fold the others and Delete folder (its spaces go back to the list). Going
+  to a space any way (a key, `agent.next`, a toast, a click) opens its machine, folder and repo.
+  `cmd-alt-]` / `cmd-alt-[` step through spaces in the list's order (machines, your folders, repos
   with their worktrees, folded rows included), and the list scrolls to keep the active space on
   screen, including after `agent.next` or a click. The list scrolls itself (wheel and a draggable
   thumb) because Herdr can't move a native scroll area from code. Hovering a
@@ -158,6 +172,9 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   `better-sidebar`), `resources` (`measure.js`),
   `new-project`, `open-vscode`, `excalidraw`.
 - Shared state keys: `live-ports`, `better-sidebar.hover`, `better-sidebar.inline-agents`,
+  `better-sidebar.groups` (`{groups: [{id, name, color, home}], projects: {<unit>: <folder id>},
+  folds: {"<machine>|<folder id>": bool}}`; a unit is a repo's `JSON.stringify([machine, git common
+  dir])` or `space:<id>`), `better-sidebar.space-parents` (a repo space's unit, read by `my-menu`; other spaces are `space:<id>`),
   `hibernate.sleeping` (`{space: {at, count}}`), `hibernate.request` (`{nonce, action, space}`, how
   the menu and the meter ask), `hibernate.answer` (the resume dialog's reply), `pane-heads`, `issues.pick`,
   `issues.changed`, `projects.settings` (per `JSON.stringify([machine, main checkout])`: name, icon,
@@ -187,6 +204,12 @@ Project settings, Excalidraw (cmd-shift-e), Open in VS Code (cmd-g) and context 
   the card or `setShared` (which redraws every mod in the window): `spaces.js` only treats a hover
   as real when the pointer moved in the last 150ms, writes `better-sidebar.hover` only while a card
   is open, and gives the scroll area a stable `.id("spaces-list")`.
+- There's no element drag-and-drop in mods (`on_drop` is only for files from outside): a drag is
+  `on_mouse_down` on a row, then `on_mouse_move` / `on_mouse_up` on whatever is under the pointer,
+  so every drop target handles both. Reset the drag state on the list's own `on_mouse_up`, which
+  runs after the target's.
+- Opening a folder when its space becomes active is done in the 250ms data timer, not in
+  `render`: `setShared` from a render redraws every mod again.
 - `space.new` without a folder starts where the focused terminal is. From a worktree, that opens a
   second space on the same worktree, and removing either one deletes the folder under both: always
   pass the machine and its home (a remote's comes from `printenv HOME` there, cached), and check

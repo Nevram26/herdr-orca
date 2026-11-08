@@ -11,6 +11,8 @@ const ICONS = {
   "folder": '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
   "cloud": '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
   "plus": '<path d="M12 5v14M5 12h14"/>',
+  "monitor": '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  "server": '<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01M6 18h.01"/>',
   "x": '<path d="M18 6 6 18M6 6l12 12"/>',
   "chev-down": '<path d="m6 9 6 6 6-6"/>',
   "chev-right": '<path d="m9 18 6-6-6-6"/>',
