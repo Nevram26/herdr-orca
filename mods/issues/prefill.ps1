@@ -31,8 +31,8 @@ while ((Get-Date) -lt $end) {
     if (-not $info) { continue }
     # Terminals that existed before this run are checked once, then skipped.
     if ($info.created_ms -lt $Since) { $old[$t] = $true; continue }
-    # By the command that started it: herdr-core names the shell as the foreground on Windows, and
-    # a new Claude has no status until its first turn.
+    # By the command that started it: herdr-core names the shell as the foreground on Windows,
+    # and Herdr starts Claude through PowerShell.
     if (-not $info.labels.'herdr.space' -or "$($info.argv)" -notmatch '\bclaude\b') { continue }
     if ("$($info.cwd)".Replace('\', '/') -notlike '*/.herdr/worktrees/*' -or -not (Ready $t)) { continue }
     $keep = Get-Clipboard -Raw
