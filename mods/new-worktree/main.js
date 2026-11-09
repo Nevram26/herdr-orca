@@ -373,12 +373,15 @@ export default class NewWorktree extends View {
   }
 
   // The issues mod's helper pastes the task into Claude's prompt once it's ready, without sending it.
-  // It watches this Mac's terminals only, so a remote space, or Windows (it needs jq and pbcopy),
+  // It watches this computer's terminals only, so a remote space
   // gets the task on the clipboard.
   async prefill(task, cx) {
     const platform = window()?.platform;
-    if (!this.on && platform !== "windows") {
-      await exec("sh", ["-c", 'nohup sh "$0" "$@" >/dev/null 2>&1 &', `${appHome()}/mods/issues/prefill.sh`, task]).catch(() => null);
+    if (!this.on) {
+      const helper = `${appHome()}/mods/issues/prefill`;
+      await (platform === "windows"
+        ? exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", `${helper}.ps1`, encodeURIComponent(JSON.stringify(task))])
+        : exec("sh", ["-c", 'nohup sh "$0" "$@" >/dev/null 2>&1 &', `${helper}.sh`, task])).catch(() => null);
       return;
     }
     cx.write_to_clipboard(task);
