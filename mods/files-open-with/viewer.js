@@ -8,7 +8,8 @@ import { syntaxColors, languageFor } from "./syntax.js";
 
 const LIMIT = 400000;
 const isMarkdown = path => /\.(md|markdown|mdx)$/i.test(path ?? "");
-const dirname = path => path.slice(0, path.lastIndexOf("/")) || "/";
+const dirname = path => path.slice(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"))) || "/";
+const drive = /^[A-Za-z]:[\\/]/; // a Windows absolute path
 
 // A relative or absolute link, resolved against the current file's folder.
 function resolve(file, href) {
@@ -16,11 +17,12 @@ function resolve(file, href) {
   try { p = decodeURIComponent(href.split("#")[0]); } catch { return null; }
   if (!p) return null;
   const parts = [];
-  for (const s of (p.startsWith("/") ? p : `${dirname(file)}/${p}`).split("/")) {
+  const full = p.startsWith("/") || drive.test(p) ? p : `${dirname(file)}/${p}`;
+  for (const s of full.replace(/\\/g, "/").split("/")) {
     if (!s || s === ".") continue;
     if (s === "..") parts.pop(); else parts.push(s);
   }
-  return "/" + parts.join("/");
+  return drive.test(full) ? parts.join("/") : "/" + parts.join("/");
 }
 
 // A plain class: main.js (the View) owns it and forwards init, render and close.
@@ -67,7 +69,8 @@ export default class Viewer {
         while (!this.closed && this.watching === dir) {
           const changed = await watchFolder(dir);
           if (this.closed || this.watching !== dir) return;
-          if (changed.some(c => c.endsWith(this.file) || this.file.startsWith(c + "/"))) this.load(cx);
+          const slash = p => p.replace(/\\/g, "/"), file = slash(this.file);
+          if (changed.map(slash).some(c => c.endsWith(file) || file.startsWith(c + "/"))) this.load(cx);
         }
       } catch { if (this.watching === dir) this.watching = null; }
     });

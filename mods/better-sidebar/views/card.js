@@ -3,7 +3,7 @@
 // { view: "card", space, folder, machine, prs, issue }.
 import { div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { props, theme, shared, setShared, closeOverlay, openOverlay, exec, settings, notify } from "herdr";
+import { props, theme, shared, setShared, closeOverlay, openOverlay, settings, notify } from "herdr";
 import { prAppearance } from "../git/pr-status.js";
 import { TEXT, SIZE, RADIUS, Icon } from "./ui.js";
 
@@ -37,8 +37,8 @@ export class Card {
       repo, number, on: null, pr, folder: p.folder, machine: p.machine } } });
   }
 
-  copy(text) {
-    exec("sh", ["-c", 'printf %s "$1" | pbcopy', "copy", text]).catch(() => null);
+  copy(text, cx) {
+    cx.write_to_clipboard(text);
     notify({ title: "Link copied", body: text, timeout: 2000 });
   }
 
@@ -71,7 +71,7 @@ export class Card {
           .child(div().flex_none().text_color(color).child(state))
           .child(div().min_w(0).truncate().child(repo))))
       .child(h_flex().flex_none().gap(1)
-        .child(this.button(`${id}-copy`, "copy", "Copy link", t, () => this.copy(url)))
+        .child(this.button(`${id}-copy`, "copy", "Copy link", t, (cx) => this.copy(url, cx)))
         .child(this.button(`${id}-open`, "external", "Open on GitHub", t, (cx) => cx.open_url(url))));
   }
 
