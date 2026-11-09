@@ -4,8 +4,9 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar } from "gpui-base";
 import { run, props, closeOverlay, theme, spaces, panes, focused, exec, home, appHome, knownAgents, readTextFile, notify, window, shared } from "herdr";
-import { ROOT, slug, titleSlug, tilde, git, place, repoOf, branches, openPRs, openIssues, prFor, badBranch, parseRef, lookup } from "./git.js";
+import { ROOT, slug, titleSlug, norm, tilde, git, place, repoOf, branches, openPRs, openIssues, prFor, badBranch, parseRef, lookup } from "./git.js";
 import { teamScript, hookEnv } from "./hooks.js";
+import { shProgram } from "./sh.js";
 
 const MODES = [
   { id: "branch", label: "Branch", icon: "git-branch", hint: "Filter branches, including ones only on origin" },
@@ -323,7 +324,7 @@ export default class NewWorktree extends View {
     this.done = true;
     localStorage.setItem("agent", this.agent ?? "");
     const name = this.name.value().trim();
-    const inside = (cwd) => cwd === path || cwd?.startsWith(path + "/");
+    const inside = (cwd) => Boolean(cwd) && (norm(cwd) === norm(path) || norm(cwd).startsWith(norm(path) + "/"));
     const s = spaces().find((s) => (s.machine ?? null) === this.on && inside(place(s)));
     if (s) {
       run("space.select", { id: s.id });
@@ -340,10 +341,13 @@ export default class NewWorktree extends View {
     const where = { folder: path, ...(this.on ? { machine: this.on } : {}), ...(name ? { name } : {}) };
     if (!script) return run("space.new", { ...where, ...(agent ? { argv: agent.run } : {}) });
     const q = (a) => `'${String(a).replace(/'/g, `'\\''`)}'`;
-    const inShell = (body) => ["env", ...hookEnv(this.project.main, path), "sh", "-c", 'exec "${SHELL:-/bin/zsh}" -lic "$1"', "sh", body];
+    // Windows: through Git's sh (env and sh aren't on PATH), ending in PowerShell, Herdr's shell there.
+    const posix = await shProgram(this.on);
+    const viaSh = posix === "sh" ? [] : [posix, "-c", '"$0" "$@"'];
+    const inShell = (body) => [...viaSh, "env", ...hookEnv(this.project.main, path), "sh", "-c", 'exec "${SHELL:-/bin/zsh}" -lic "$1"', "sh", body];
     // rc, not status: zsh's $status is read-only.
     const report = 'rc=$?\nif [ "$rc" -eq 0 ]; then echo "Setup finished."; else echo "Setup failed (exit $rc)."; fi';
-    const shell = 'exec "${SHELL:-/bin/zsh}" -l';
+    const shell = posix === "sh" ? 'exec "${SHELL:-/bin/zsh}" -l' : "exec powershell.exe -NoLogo";
     if (this.own().setupWait || !agent) {
       run("space.new", { ...where, argv: inShell(`${script}\n${report}\n${agent ? `exec ${agent.run.map(q).join(" ")}` : shell}`) });
       return;
@@ -351,7 +355,7 @@ export default class NewWorktree extends View {
     run("space.new", { ...where, argv: agent.run });
     // The new space shows up a moment later: add a Setup tab, then go back to the agent's tab.
     for (let i = 0; i < 30; i++) {
-      const sp = spaces().find((x) => (x.machine ?? null) === (this.on ?? null) && x.folder === path && x.tabs?.length);
+      const sp = spaces().find((x) => (x.machine ?? null) === (this.on ?? null) && norm(x.folder) === norm(path) && x.tabs?.length);
       if (sp) {
         const agentTab = sp.tabs[0].id;
         run("tab.new", { space: sp.id, name: "Setup", argv: inShell(`${script}\n${report}\n${shell}`) });
