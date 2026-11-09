@@ -13,7 +13,11 @@ const MODES = [
   { id: "pr", label: "PR", icon: "pull-request", hint: "Filter open pull requests, or paste #123 or a link" },
   { id: "new", label: "New", icon: "plus", hint: "" },
 ];
-const DEFAULTS = { issue_branch: "dev/feat/{number}" };
+const DEFAULTS = {
+  issue_branch: "dev/feat/{number}",
+  issue_prompt: 'Work on GitHub issue #{number} in {repo}: "{title}". Read it first with: gh issue view {number} -R {repo} --comments',
+  pr_prompt: 'Pick up GitHub pull request #{number} in {repo}: "{title}". Read it first with: gh pr view {number} -R {repo} --comments',
+};
 const icon = (name, size = 14) => svg(`mods/new-worktree/icons/${name}.svg`).size(size).flex_none();
 const stop = (_e, cx) => cx.stop_propagation();
 
@@ -363,9 +367,12 @@ export default class NewWorktree extends View {
     const pick = this.pick, repo = this.project.gh;
     if (props()?.task) return props().task;
     if (!agent || agent.run?.[0] !== "claude" || !repo) return null;
-    if (pick.kind === "issue") return `Work on GitHub issue #${pick.number} in ${repo}: "${pick.title}". Read it first with: gh issue view ${pick.number} -R ${repo} --comments`;
-    if (pick.kind === "pr") return `Pick up GitHub pull request #${pick.number} in ${repo}: "${pick.title}". Read it first with: gh pr view ${pick.number} -R ${repo} --comments`;
-    return null;
+    if (pick.kind !== "issue" && pick.kind !== "pr") return null;
+    // issue_prompt / pr_prompt: the project's, else mod.json's, else the default; blank keeps the default.
+    const key = `${pick.kind}_prompt`;
+    return String(this.own()[key] || this.settings[key] || DEFAULTS[key])
+      .replaceAll("{number}", String(pick.number)).replaceAll("{title}", pick.title ?? "")
+      .replaceAll("{repo}", repo).replaceAll("{branch}", this.branch.value().trim());
   }
 
   // The issues mod's helper pastes the task into Claude's prompt once it's ready, without sending it.
