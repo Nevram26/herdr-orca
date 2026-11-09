@@ -110,9 +110,15 @@ export default class Hibernate extends View {
 
   // Herdr's own start time marks a new launch, so a reload of this mod isn't one.
   async noteLaunch() {
-    const r = await exec("ps", ["-axo", "lstart=,comm="]).catch(() => null);
-    const line = (r?.stdout ?? "").split("\n").map((l) => l.trim()).find((l) => /\/Herdr\.app\/Contents\/MacOS\/Herdr$/.test(l));
-    const launch = line ? line.replace(/\s+\/.*$/, "") : null;
+    let launch = null;
+    if (window()?.platform === "windows") {
+      const r = await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "(Get-Process herdr-app | Sort-Object StartTime | Select-Object -First 1).StartTime.ToString('o')"]).catch(() => null);
+      launch = r?.stdout.trim() || null;
+    } else {
+      const r = await exec("ps", ["-axo", "lstart=,comm="]).catch(() => null);
+      const line = (r?.stdout ?? "").split("\n").map((l) => l.trim()).find((l) => /\/Herdr\.app\/Contents\/MacOS\/Herdr$/.test(l));
+      launch = line ? line.replace(/\s+\/.*$/, "") : null;
+    }
     if (!launch || launch === this.state.launch) return;
     this.state.launch = launch;
     await this.save();
@@ -167,7 +173,6 @@ export default class Hibernate extends View {
   async sleep(cx, id, confirmed) {
     const space = spaces().find((s) => s.id === id);
     if (!space) return;
-    if (!space.machine && window().platform === "windows") return notify({ title: "Sleep needs ps and kill on the space's machine", body: "This Windows computer lacks them. Spaces on WSL or another machine work.", level: "warning" });
     if (offline(id)) return notify({ title: `${space.name}'s machine is offline`, level: "warning" });
     if (this.state.sleeping[id]) return;
     let entries;
