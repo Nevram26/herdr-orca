@@ -24,9 +24,12 @@ def alive(pid):
         kernel.CloseHandle(ctypes.c_void_p(handle))
         return code.value == 259
     try:
+        stat = Path(f'/proc/{pid}/stat')
+        if stat.exists() and stat.read_text().split(') ', 1)[1].startswith('Z '):
+            return False
         os.kill(pid, 0)
         return True
-    except ProcessLookupError:
+    except (FileNotFoundError, ProcessLookupError):
         return False
 
 
@@ -53,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix='usage-helper-check-') as temporary:
     mock = scratch / 'mock.py'
     mock.write_text('''import os, sys, time, subprocess
 from pathlib import Path
-child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+child = subprocess.Popen([sys.executable, '-c', 'import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 Path(os.environ['MOCK_PID']).write_text(str(os.getpid()) + ' ' + str(child.pid))
 for line in sys.stdin:
     if 'get_usage' in line or '"id":2' in line:
@@ -63,7 +66,10 @@ for line in sys.stdin:
 time.sleep(30)
 ''', newline='\n')
     launcher = scratch / 'mock-cli'
-    launcher.write_text('#!/bin/sh\nexec ' + shlex.quote(Path(sys.executable).as_posix()) + ' ' + shlex.quote(mock.as_posix()) + ' "$@"\n', newline='\n')
+    command = shlex.quote(Path(sys.executable).as_posix()) + ' ' + shlex.quote(mock.as_posix()) + ' "$@"'
+    # Unix npm-style shims stay alive and forward TERM to the real binary.
+    launch = ('exec ' + command + '\n') if os.name == 'nt' else ('exec 3<&0\n' + command + ' <&3 3<&- &\nchild=$!\nexec 3<&-\ntrap \'kill -TERM "$child" 2>/dev/null\' TERM\nwait "$child"\n')
+    launcher.write_text('#!/bin/sh\n' + launch, newline='\n')
     launcher.chmod(0o755)
     for name in ['claude-usage.sh', 'codex-limits.sh', 'codex-reset.sh']:
         source = root / 'helpers' / name
@@ -90,8 +96,7 @@ time.sleep(30)
                 pid, descendant = map(int, pid_file.read_text().split())
                 assert elapsed < 20, (name, reply, 'waited for post-EOF cleanup', elapsed)
                 assert not alive(pid), (name, reply, 'child survived helper exit', pid)
-                if os.name == 'nt':
-                    assert not alive(descendant), (name, reply, 'native descendant survived', descendant)
+                assert not alive(descendant), (name, reply, 'native descendant survived', descendant)
                 expected = 0 if reply == 'yes' or name == 'codex-limits.sh' else 1
                 assert result.returncode == expected, (name, reply, result)
                 if reply == 'yes':
