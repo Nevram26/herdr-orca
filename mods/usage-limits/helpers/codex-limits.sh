@@ -18,19 +18,40 @@ CODEX=$(command -v "${HERDR_USAGE_CODEX_BIN:-codex}" 2>/dev/null) || exit 127
 {
   dir=$(mktemp -d "${TMPDIR:-/tmp}/herdr-codex-limits.XXXXXX") || exit 1
   out="$dir/out"
+  deadline=$(($(date +%s) + 15))
   # A plain pipe, not a FIFO: Git Bash's mkfifo doesn't reach a native Windows codex.
-  # The writer holds stdin open until the reply lands (or 15 s), then EOF ends app-server.
+  # The writer holds stdin open until the reply lands (or 15 s), then the supervisor terminates app-server.
   {
     printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"herdr-usage-limits","version":"1.0"}}}'
     printf '%s\n' '{"jsonrpc":"2.0","method":"initialized"}'
     printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"account/rateLimits/read","params":{}}'
     i=0
-    while [ "$i" -lt 75 ]; do
+    while [ "$i" -lt 75 ] && [ "$(date +%s)" -lt "$deadline" ]; do
       if grep -q '"id":2' "$out" 2>/dev/null; then break; fi
       sleep 0.2
       i=$((i + 1))
     done
-  } | "$CODEX" app-server >"$out" 2>/dev/null
+  } | (
+    "$CODEX" app-server <&0 >"$out" 2>/dev/null &
+    child=$!
+    # EOF can drain outstanding RPCs for longer than our budget. Stop and reap the child.
+    i=0
+    while [ "$i" -lt 75 ] && [ "$(date +%s)" -lt "$deadline" ]; do
+      if grep -q '"id":2' "$out" 2>/dev/null; then break; fi
+      if ! kill -0 "$child" 2>/dev/null; then break; fi
+      sleep 0.2
+      i=$((i + 1))
+    done
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*)
+        # A CLI shim can own a native child: terminate the owned Windows process tree.
+        winpid=$(ps -p "$child" | awk 'NR == 2 { print $4 }')
+        if [ -n "$winpid" ]; then MSYS_NO_PATHCONV=1 taskkill.exe /PID "$winpid" /T /F >/dev/null 2>&1; fi
+        ;;
+    esac
+    kill -KILL "$child" 2>/dev/null
+    wait "$child" 2>/dev/null
+  )
 
   if grep -m1 '"id":2' "$out"; then
     rm -rf "$dir"
