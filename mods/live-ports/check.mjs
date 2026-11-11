@@ -36,3 +36,46 @@ assert.deepEqual(r.bySpace, { s1: [
 ] });
 assert.deepEqual(r.external, [{ port: 135, pid: 900, name: "svchost", address: "localhost:135", machine: null, reachable: true }, { port: 8000, pid: 7, name: "node", address: "localhost:8000", machine: "wsl", reachable: true }]);
 console.log("live-ports check passed");
+// Cache regressions use fresh mocked OS snapshots; no native process is touched.
+let phase = 0, lookups = 0, processReads = 0, failLookup = false;
+const snapshots = [
+  { shell: 100, pid: 300, space: "first", parent: 100, name: "node" },
+  { shell: 101, pid: 400, space: "recovered", parent: 101, name: "node" },
+  { shell: 101, pid: 400, space: "relabeled", parent: 101, name: "node" },
+  { shell: 101, pid: 400, space: "relabeled", parent: 50, name: "other" },
+];
+globalThis.herdr = {
+  terminals: () => [{ address: "t1", state: "live" }],
+  readTextFile: async () => "",
+  hc: async () => {
+    if (failLookup) throw new Error("terminal disappeared");
+    lookups++;
+    const s = snapshots[phase];
+    return { code: 0, stdout: JSON.stringify({ pid: s.shell, labels: { "herdr.space": s.space } }) };
+  },
+  exec: async (cmd) => {
+    const s = snapshots[phase];
+    if (cmd === "netstat") return { code: 0, stdout: `TCP 127.0.0.1:3000 0.0.0.0:0 LISTENING ${s.pid}\n` };
+    processReads++;
+    return { code: 0, stdout: `${s.pid} ${s.parent} ${s.name}.exe\n${s.shell} 50 powershell.exe\n` };
+  },
+};
+const fresh = await import(`data:text/javascript,${encodeURIComponent(src + "\n// recovery regression")}`);
+let last;
+for (; phase < snapshots.length; phase++) {
+  last = await fresh.scanPorts([], [], [], "windows", last);
+  if (phase < 3) assert.equal(last.bySpace[snapshots[phase].space]?.[0]?.pid, snapshots[phase].pid, `terminal snapshot ${phase}`);
+  else {
+    assert.deepEqual(last.bySpace, {}, "reused listener PID must not keep its old parent chain");
+    assert.equal(last.external[0].name, "other");
+  }
+}
+assert.equal(lookups, 4);
+assert.equal(processReads, 4);
+// A failed metadata refresh cannot retain ownership from the previous scan.
+failLookup = true;
+phase = 2;
+last = await fresh.scanPorts([], [], [], "windows", last);
+assert.deepEqual(last.bySpace, {});
+assert.equal(last.external.length, 1);
+console.log("terminal recovery and PID reuse check passed");

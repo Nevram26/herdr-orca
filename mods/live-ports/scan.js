@@ -120,10 +120,10 @@ function parseNetstat(out) {
   return [...seen.values()].sort((a, b) => a.port - b.port);
 }
 
-// One process list for the new listeners only: a process's ancestors don't change.
+// Refresh each scan: Windows can reuse a listener PID between scans.
 async function loadChains(pids) {
-  const missing = pids.filter((p) => !procs.has(p));
-  if (!missing.length) return;
+  procs.clear();
+  if (!pids.length) return;
   const r = await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
     "Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name | ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, $_.ParentProcessId, $_.Name }"]);
   const all = new Map();
@@ -131,7 +131,7 @@ async function loadChains(pids) {
     const m = line.match(/^(\d+) (\d+) (.+)$/);
     if (m) all.set(Number(m[1]), { ppid: Number(m[2]), name: m[3].replace(/\.exe$/i, "") });
   }
-  for (const pid of missing) {
+  for (const pid of pids) {
     const chain = [];
     // Windows keeps a dead parent's pid, which may be reused: stop at a loop.
     for (let p = pid; all.has(p) && !chain.includes(p); p = all.get(p).ppid) chain.push(p);
@@ -139,13 +139,11 @@ async function loadChains(pids) {
   }
 }
 
-// Each live local terminal's shell pid (`hc get`, once) and space; a sub-agent's is its parent's.
+// Refresh shell PIDs and labels: a recovered terminal can keep its address.
 async function loadShells() {
   const live = terminals().filter((t) => !t.address.includes("/") && (t.state ?? "live") === "live");
-  const addrs = new Set(live.map((t) => t.address));
-  for (const a of shells.keys()) if (!addrs.has(a)) shells.delete(a);
+  shells.clear();
   for (const t of live) {
-    if (shells.has(t.address)) continue;
     const r = await hc(["get", "--json", t.address]).catch(() => null);
     try {
       const j = JSON.parse(r.stdout);
@@ -163,9 +161,7 @@ function shellSpace(address, seen = new Set()) {
 
 async function scanWindows() {
   const listeners = parseNetstat((await exec("netstat", ["-ano"])).stdout);
-  const live = new Set(listeners.map((l) => l.pid));
-  for (const pid of procs.keys()) if (!live.has(pid)) procs.delete(pid);
-  await loadChains([...live]);
+  await loadChains([...new Set(listeners.map((l) => l.pid))]);
   await loadShells();
   const spaceOfPid = new Map([...shells].map(([address, s]) => [s.pid, shellSpace(address)]));
   const bySpace = {};
