@@ -6,9 +6,9 @@ import { exec, panes, window } from "herdr";
 export const ROOT = (home) => `${home}/.herdr/worktrees`;
 export const slug = (branch) => branch.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
 export const titleSlug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
-// Git says C:/x where Windows says C:\x (in any case): paths compared in one spelling.
-export const norm = (p) => (p && window()?.platform === "windows" ? p.replace(/\\/g, "/").toLowerCase() : p);
-export const tilde = (path, home) => (home && norm(path).startsWith(norm(home)) ? `~${path.slice(home.length)}` : path);
+// Normalize local Windows paths only; a remote machine may have case-sensitive Unix paths.
+export const norm = (p, on) => (p && !on && window()?.platform === "windows" ? p.replace(/\\/g, "/").toLowerCase() : p);
+export const tilde = (path, home, on) => (home && norm(path, on).startsWith(norm(home, on)) ? `~${path.slice(home.length)}` : path);
 
 export async function git(cwd, args, on) {
   const r = await exec("git", args, { cwd, on }).catch((e) => ({ code: 1, stderr: String(e) }));

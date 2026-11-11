@@ -170,7 +170,7 @@ export default class NewWorktree extends View {
     if (m === "branch") {
       const out = [], used = new Set(d.worktrees.map((w) => w.branch));
       for (const w of d.worktrees) if (!w.main && w.branch && has(w.branch))
-        out.push({ kind: "open", branch: w.branch, path: w.path, label: w.branch, sub: tilde(w.path, this.home), tag: "Open", icon: "folder", mono: true });
+        out.push({ kind: "open", branch: w.branch, path: w.path, label: w.branch, sub: tilde(w.path, this.home, this.on), tag: "Open", icon: "folder", mono: true });
       for (const b of d.local) if (!used.has(b.name) && has(b.name))
         out.push({ kind: "local", branch: b.name, label: b.name, sub: "Local branch", tag: "Local", icon: "git-branch", mono: true });
       for (const b of d.remote) if (has(b.name))
@@ -253,14 +253,14 @@ export default class NewWorktree extends View {
     if (!d || !pick || pick.kind === "lookup") return null;
     if (badBranch(branch)) return { error: branch ? `"${branch}" isn't a valid branch name.` : "Name the branch." };
     const open = d.worktrees.find((w) => w.branch === branch);
-    if (open) return { action: "open", path: open.path, note: `Already checked out at ${tilde(open.path, this.home)} · opens it` };
+    if (open) return { action: "open", path: open.path, note: `Already checked out at ${tilde(open.path, this.home, this.on)} · opens it` };
     if (d.local.some((b) => b.name === branch)) return { action: "local", note: pick.kind === "issue" ? `${branch} already exists · checks it out` : "Local branch · checks it out" };
     if (d.allRemote.some((b) => b.name === branch)) return { action: "remote", note: `Only on origin · makes a local branch tracking origin/${branch}` };
     if (pick.kind === "pr" && branch === pick.head) return { action: "remote", fetch: true, note: `Fetches ${branch} from origin, then tracks it` };
     // A new branch: from the picked branch or PR when renamed, else from the base.
     const from = pick.kind === "local" || pick.kind === "open" ? pick.branch : pick.kind === "remote" ? `origin/${pick.branch}`
       : pick.kind === "pr" ? `origin/${pick.head}` : null;
-    const folder = tilde(this.dirFor(branch), this.home);
+    const folder = tilde(this.dirFor(branch), this.home, this.on);
     return { action: "new", from: from ?? this.base, fromBase: !from, fetchFrom: pick.kind === "pr" ? pick.head : null,
       note: `New branch from ${from ?? this.base} · ${folder}` };
   }
@@ -324,7 +324,7 @@ export default class NewWorktree extends View {
     this.done = true;
     localStorage.setItem("agent", this.agent ?? "");
     const name = this.name.value().trim();
-    const inside = (cwd) => Boolean(cwd) && (norm(cwd) === norm(path) || norm(cwd).startsWith(norm(path) + "/"));
+    const inside = (cwd) => Boolean(cwd) && (norm(cwd, this.on) === norm(path, this.on) || norm(cwd, this.on).startsWith(norm(path, this.on) + "/"));
     const s = spaces().find((s) => (s.machine ?? null) === this.on && inside(place(s)));
     if (s) {
       run("space.select", { id: s.id });
@@ -355,7 +355,7 @@ export default class NewWorktree extends View {
     run("space.new", { ...where, argv: agent.run });
     // The new space shows up a moment later: add a Setup tab, then go back to the agent's tab.
     for (let i = 0; i < 30; i++) {
-      const sp = spaces().find((x) => (x.machine ?? null) === (this.on ?? null) && norm(x.folder) === norm(path) && x.tabs?.length);
+      const sp = spaces().find((x) => (x.machine ?? null) === (this.on ?? null) && norm(x.folder, this.on) === norm(path, this.on) && x.tabs?.length);
       if (sp) {
         const agentTab = sp.tabs[0].id;
         run("tab.new", { space: sp.id, name: "Setup", argv: inShell(`${script}\n${report}\n${shell}`) });
@@ -508,7 +508,7 @@ export default class NewWorktree extends View {
         .child(this.label(t, "Project"))
         .child(this.select_(t, "nw-project", icon("folder", 14).text_color(t.muted), r ? r.name : r === null ? "Not in a git repository" : "Finding repositories…", "project"))
         .when(this.menu === "project", (el) => el.child(this.options(t, "nw-projects", this.projects.map((p) =>
-          [p.main, icon("folder", 14).text_color(t.muted), `${p.name}  ${tilde(p.main, this.home)}`, p === r, (cx) => cx.spawn(async (cx) => this.choose(p, cx))])))))
+          [p.main, icon("folder", 14).text_color(t.muted), `${p.name}  ${tilde(p.main, this.home, this.on)}`, p === r, (cx) => cx.spawn(async (cx) => this.choose(p, cx))])))))
       // Source tabs, the base for a new branch, and fetch
       .child(h_flex().gap(4).items_center()
         .children(MODES.map((m) => h_flex().id(`nw-mode-${m.id}`).h(29).px(10).gap(7).items_center().rounded(7)
