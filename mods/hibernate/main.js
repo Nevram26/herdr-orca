@@ -4,7 +4,7 @@
 import { View, div } from "gpui-kit";
 import { spaces, machines, shared, setShared, notify, openOverlay, closeOverlay, appHome, props, focused, nextCommand, exec, readTextFile, writeTextFile, window } from "herdr";
 import * as fs from "fs/promises";
-import { get, list, describe, idleShell, start, stop, commandLine, machineOf } from "./core.js";
+import { get, list, describe, idleShell, start, stop, commandLine, machineOf, missingCodexSession } from "./core.js";
 import { SleepDialog, ResumeDialog } from "./ui.js";
 import { loadSettings } from "./settings.js";
 
@@ -14,6 +14,7 @@ const LOST_GRACE = 15 * 60 * 1000;
 const local = (address) => !String(address).includes("/");
 // mod.json `settings` (Mod settings, mod.schema.json): when sleeping spaces wake, and what a restart does.
 const DEFAULTS = { wake: "manual", after_restart: "ask" };
+const CODEX_SESSION_HELP = "Codex session ownership could not be verified. Record the current session ID in Codex before exiting manually; use codex resume <session-id> to continue it.";
 const offline = (id) => machines().find((m) => m.name === machineOf(id))?.layout !== "ready";
 const busy = (e) => !e.parent && (e.status === "working" || e.status === "blocked");
 
@@ -182,6 +183,7 @@ export default class Hibernate extends View {
       return notify({ title: `${space.name}: can't reach its machine`, level: "warning" });
     }
     if (!entries.some((e) => !e.parent)) return notify({ title: `Nothing running in ${space.name}`, level: "info" });
+    if (entries.some(missingCodexSession)) return notify({ title: `${space.name} is still running`, body: CODEX_SESSION_HELP, level: "warning" });
     const working = entries.filter(busy);
     if (working.length && !confirmed) {
       openOverlay({ mod: "hibernate", kind: "dialog", modal: true, width: 440, height: 230 + 22 * working.length, props: { view: "sleep", space: id, name: space.name, busy: working.map((e) => `${e.name} is ${e.status}`) } });
@@ -204,6 +206,7 @@ export default class Hibernate extends View {
     const s = this.state.sleeping[id];
     if (!s) return;
     if (offline(id)) return notify({ title: `${s.name}'s machine is offline`, level: "warning" });
+    if (s.items.some(missingCodexSession)) return notify({ title: `${s.name}: Codex needs a session ID`, body: CODEX_SESSION_HELP, level: "warning" });
     this.toWake.delete(id); // woken now: a later sleep isn't this launch's to wake
     const tops = s.items.filter((e) => !e.parent);
     const ok = await Promise.all(tops.map(start));
@@ -233,12 +236,12 @@ export default class Hibernate extends View {
     for (const g of live) {
       if (g.parent || !g.labels?.["herdr.space"]) continue;
       const e = await describe(g);
-      if (e) next[e.address] = { ...e, status: null };
+      if (e && !missingCodexSession(e)) next[e.address] = { ...e, status: null };
     }
     const now = Date.now();
     const recovered = [];
     for (const o of Object.values(this.state.rolling.items ?? {})) {
-      if (next[o.address]) continue;
+      if (next[o.address] || missingCodexSession(o)) continue;
       const g = byAddress.get(o.address) ?? (await get(o.address));
       if (g?.state === "live") {
         if (g.pid !== o.shellPid && idleShell(g)) recovered.push({ ...o, shellPid: g.pid, at: now });
@@ -281,11 +284,16 @@ export default class Hibernate extends View {
       return this.save();
     }
     const items = await this.stillPending();
+    const key = items.map((p) => `${p.address}:${p.shellPid}`).sort().join(",");
+    if (items.some(missingCodexSession)) {
+      if (!this.offered.has(key)) notify({ title: "Codex needs a session ID", body: CODEX_SESSION_HELP, level: "warning" });
+      this.offered.add(key);
+      return;
+    }
     if (this.settings.after_restart === "auto") {
       if (items.length) await this.resume(items, true);
       return;
     }
-    const key = items.map((p) => `${p.address}:${p.shellPid}`).sort().join(",");
     if (!items.length || this.offered.has(key)) return;
     this.offered.add(key);
     // One dialog at a time; the replaced one's answer is ignored as stale.
@@ -310,6 +318,7 @@ export default class Hibernate extends View {
     this.state.offer = null;
     const chosen = new Set(a.resume ?? []);
     const items = (await this.stillPending()).filter((p) => chosen.has(p.address));
+    if (items.some(missingCodexSession)) return notify({ title: "Codex needs a session ID", body: CODEX_SESSION_HELP, level: "warning" });
     this.state.pending = [];
     await this.save();
     if (items.length) await this.resume(items, false);

@@ -1,5 +1,5 @@
 // What runs in a terminal, how to stop it, and how to start it again.
-import { hc, exec, home, readTextFile, window } from "herdr";
+import { hc, exec, home, readTextFile, window, appHome } from "herdr";
 
 const SHELLS = new Set(["zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh", "csh", "nu", "xonsh", "pwsh", "powershell", "cmd", "login"]);
 // Either slash; Windows names lose ".exe".
@@ -27,7 +27,7 @@ const powershell = (script) => exec("powershell.exe", ["-NoProfile", "-NonIntera
 let snapshot = null;
 function processes() {
   if (snapshot && Date.now() - snapshot.at < 1000) return snapshot.list;
-  const list = powershell("[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name,CommandLine | Select-Object ProcessId,ParentProcessId,Name,CommandLine)")
+  const list = powershell("[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name,CommandLine,CreationDate | Select-Object ProcessId,ParentProcessId,Name,CommandLine,@{Name='StartedAt';Expression={$_.CreationDate.ToUniversalTime().ToString('o')}})")
     .then((r) => JSON.parse(r.stdout))
     .catch(() => []);
   snapshot = { at: Date.now(), list };
@@ -37,7 +37,27 @@ function processes() {
 // A Windows command line as argv. An agent behind a launcher (node codex.js, cmd /c codex.cmd)
 // counts as that agent: ["codex", ...its arguments].
 function argvOf(line) {
-  const argv = (String(line ?? "").match(/(?:[^\s"]+|"[^"]*")+/g) ?? []).map((s) => s.replace(/"/g, ""));
+  line = String(line ?? "");
+  const argv = [];
+  for (let i = 0; i < line.length;) {
+    while (/[ \t]/.test(line[i] ?? "") && i < line.length) i++;
+    if (i === line.length) break;
+    let arg = "", quoted = false;
+    while (i < line.length && (quoted || !/[ \t]/.test(line[i]))) {
+      let slashes = 0;
+      while (line[i] === "\\") slashes++, i++;
+      if (line[i] === '"') {
+        arg += "\\".repeat(Math.floor(slashes / 2));
+        if (slashes % 2) arg += '"', i++;
+        else if (quoted && line[i + 1] === '"') arg += '"', i += 2;
+        else quoted = !quoted, i++;
+      } else {
+        arg += "\\".repeat(slashes);
+        if (i < line.length && (quoted || !/[ \t]/.test(line[i]))) arg += line[i++];
+      }
+    }
+    argv.push(arg);
+  }
   const agent = (a) => base(a).replace(/\.(js|cmd|ps1)$/i, "");
   const i = argv.findIndex((a, j) => j > 0 && ["claude", "codex"].includes(agent(a)));
   return i > 0 ? [agent(argv[i]), ...argv.slice(i + 1)] : argv;
@@ -58,6 +78,10 @@ export async function get(address) {
   if (windows() && !machineOf(address) && g.state === "live" && f?.pid === g.pid && isShell(f.argv?.[0] ?? f.name)) {
     const kid = (await processes()).find((p) => p.ParentProcessId === g.pid && !/^(conhost|OpenConsole)\.exe$/i.test(p.Name));
     if (kid) g.foreground = { pid: kid.ProcessId, name: kid.Name, argv: argvOf(kid.CommandLine), cwd: f.cwd };
+  }
+  if (windows() && !machineOf(address) && program(g)) {
+    const p = (await processes()).find((p) => p.ProcessId === g.foreground.pid);
+    g.foreground.startedAt = p?.StartedAt;
   }
   return g;
 }
@@ -98,13 +122,13 @@ async function claudeSession(pid, on) {
   }
 }
 
-// Codex keeps its rollout file open; its name ends with the session id.
-// Windows has no lsof: the newest rollout whose first line names this folder.
-async function codexSession(pid, on, cwd) {
+// The open rollout identifies the current conversation, even after in-app session switches.
+async function codexSession(pid, on, startedAt, cwd) {
   if (!on && windows()) {
-    const needle = `"cwd":${JSON.stringify(cwd)}`;
-    const r = await powershell(`Get-ChildItem -LiteralPath ${psq(`${home()}/.codex/sessions`)} -Recurse -Filter 'rollout-*.jsonl' | Sort-Object LastWriteTime -Descending | Select-Object -First 200 | Where-Object { (Get-Content -LiteralPath $_.FullName -TotalCount 1).IndexOf(${psq(needle)}, [StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object -First 1 -ExpandProperty Name`).catch(() => null);
-    return (r?.stdout ?? "").match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl/)?.[1] ?? null;
+    if (!startedAt) return null;
+    const r = await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", `${appHome()}/mods/hibernate/codex-session.ps1`, "-ProcessId", String(pid), "-StartedAt", startedAt, "-SessionRoot", `${home()}/.codex/sessions`, "-Cwd", cwd]).catch(() => null);
+    const id = r?.stdout.trim() ?? "";
+    return r?.code === 0 && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : null;
   }
   const kids = await exec("pgrep", ["-P", String(pid)], { on }).catch(() => null);
   const pids = [String(pid), ...(kids?.stdout ?? "").split(/\s+/).filter(Boolean)];
@@ -119,10 +143,12 @@ export async function describe(g) {
   if (!f) return null;
   const k = kind(g, f);
   const on = machineOf(g.address);
-  const session = k === "claude" ? await claudeSession(f.pid, on) : k === "codex" ? await codexSession(f.pid, on, f.cwd || g.cwd) : null;
+  const session = k === "claude" ? await claudeSession(f.pid, on) : k === "codex" ? await codexSession(f.pid, on, f.startedAt, f.cwd || g.cwd) : null;
   return {
     address: g.address,
     shellPid: g.pid,
+    processPid: f.pid,
+    processStartedAt: f.startedAt,
     argv: f.argv ?? [],
     cwd: f.cwd || g.cwd,
     kind: k,
@@ -134,6 +160,9 @@ export async function describe(g) {
     parent: g.parent ?? null,
   };
 }
+
+// Never stop or revive Windows Codex using an unverified conversation (including old snapshots).
+export const missingCodexSession = (e) => windows() && !machineOf(e.address) && e.kind === "codex" && (!e.session || !e.processStartedAt);
 
 // Flags worth carrying over to a resumed agent.
 const KEEP = {
@@ -151,17 +180,26 @@ function kept(argv, k) {
 }
 
 export function resumeArgv(e) {
+  if (missingCodexSession(e)) throw new Error("Codex session is unknown; leave it running and record its session ID before exiting.");
   if (e.kind === "claude") return e.session ? ["claude", ...kept(e.argv, "claude"), "--resume", e.session] : e.argv;
   if (e.kind === "codex") return ["codex", "resume", "--no-daemon", ...kept(e.argv, "codex"), e.session ?? "--last"];
   return e.argv;
 }
 
 const q = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`);
+// The local script scope selects Legacy on pwsh too, so Windows-encoded empty/quoted arguments work in both versions.
+const psNativeArg = (s) => psq(/[ \t"]/.test(s) || s === "" ? '"' + s.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, '$1$1') + '"' : s);
 // What to type into `shell`. PowerShell (Herdr's shell on Windows) has no && in 5.1.
-export const commandLine = (e, shell = windows() && !machineOf(e.address) ? "powershell" : "sh") =>
-  shell === "powershell" || shell === "pwsh"
-    ? `Set-Location -LiteralPath ${psq(e.cwd)}; if ($?) { & ${resumeArgv(e).map(psq).join(" ")} }`
-    : `cd ${q(e.cwd)} && ${resumeArgv(e).map(q).join(" ")}`;
+export function commandLine(e, shell = windows() && !machineOf(e.address) ? "powershell" : "sh") {
+  const argv = resumeArgv(e);
+  if (shell === "powershell" || shell === "pwsh") {
+    const invoke = windows() && !machineOf(e.address)
+      ? `& { $PSNativeCommandArgumentPassing = 'Legacy'; & ${psq(argv[0])} ${argv.slice(1).map(psNativeArg).join(" ")} }`
+      : `& ${argv.map(psq).join(" ")}`;
+    return `Set-Location -LiteralPath ${psq(e.cwd)}; if ($?) { ${invoke} }`;
+  }
+  return `cd ${q(e.cwd)} && ${argv.map(q).join(" ")}`;
+}
 
 // A send from another machine reaches a shell that once ran an agent as a tagged message
 // (`<hc from=...>`), which the shell can't run: so a remote terminal is typed into from its own machine.
@@ -177,6 +215,7 @@ const missing = async (address) => {
 
 // Starts an entry again in its idle shell; never types into a busy one.
 export async function start(e) {
+  if (missingCodexSession(e)) return false;
   const g = await get(e.address);
   // A failed lookup (machine unreachable) isn't a gone terminal: leave it for the next wake.
   if (!g && !(await missing(e.address))) return false;
@@ -225,6 +264,11 @@ async function term(address) {
 
 // Stops what runs in a terminal and leaves its shell in place.
 export async function stop(cx, e) {
+  if (missingCodexSession(e)) return false;
+  if (windows() && !machineOf(e.address) && e.kind === "codex") {
+    const current = await describe(await get(e.address));
+    if (!current || current.session !== e.session || current.shellPid !== e.shellPid || current.processPid !== e.processPid || current.processStartedAt !== e.processStartedAt) return false;
+  }
   if (e.kind === "claude" || e.kind === "codex") {
     if (e.status === "working" || e.status === "blocked") await hc(["interrupt", e.address, "--timeout", "5"]).catch(() => null);
     // Pressed as keys: a send from another machine reaches an agent as a tagged message, not a command.
