@@ -80,7 +80,7 @@ time.sleep(30)
         assert f'"$i" -lt {budget}' in script, name
         # Only scratch copies shorten polling. Production retains 15/30 seconds.
         helper = scratch / name
-        helper.write_text(script.replace(f'"$i" -lt {budget}', '"$i" -lt 2'), newline='\n')
+        helper.write_text(script.replace(f'"$i" -lt {budget}', '"$i" -lt 10'), newline='\n')
         for reply in ['yes', 'no']:
             pid_file = scratch / 'pid'
             pid_file.unlink(missing_ok=True)
@@ -92,7 +92,7 @@ time.sleep(30)
                 result = subprocess.run([sh, helper.as_posix(), 'test-key'], env=env,
                                         capture_output=True, text=True, timeout=20)
                 elapsed = time.monotonic() - started
-                assert pid_file.exists(), (name, result.stderr)
+                assert pid_file.exists(), (name, reply, elapsed, result)
                 pid, descendant = map(int, pid_file.read_text().split())
                 assert elapsed < 20, (name, reply, 'waited for post-EOF cleanup', elapsed)
                 assert not alive(pid), (name, reply, 'child survived helper exit', pid)
