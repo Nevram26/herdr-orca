@@ -17,6 +17,7 @@ case "$1" in ''|*[!0-9a-z-]*) exit 2 ;; esac
 
 dir=$(mktemp -d "${TMPDIR:-/tmp}/herdr-codex-reset.XXXXXX") || exit 1
 out="$dir/out"
+deadline=$(($(date +%s) + 30))
 
 # A plain pipe, not a FIFO, as in codex-limits.sh.
 {
@@ -24,12 +25,44 @@ out="$dir/out"
   printf '%s\n' '{"jsonrpc":"2.0","method":"initialized"}'
   printf '{"jsonrpc":"2.0","id":2,"method":"account/rateLimitResetCredit/consume","params":{"idempotencyKey":"%s"}}\n' "$1"
   i=0
-  while [ "$i" -lt 150 ]; do
+  while [ "$i" -lt 150 ] && [ "$(date +%s)" -lt "$deadline" ]; do
     if grep -q '"id":2' "$out" 2>/dev/null; then break; fi
     sleep 0.2
     i=$((i + 1))
   done
-} | "$CODEX" app-server >"$out" 2>/dev/null
+} | (
+  exec 3<&0
+  "$CODEX" app-server <&3 3<&- >"$out" 2>/dev/null &
+  child=$!
+  exec 3<&-
+  # EOF can drain outstanding RPCs for longer than our budget. Stop and reap the child.
+  i=0
+  while [ "$i" -lt 150 ] && [ "$(date +%s)" -lt "$deadline" ]; do
+    if grep -q '"id":2' "$out" 2>/dev/null; then break; fi
+    if ! kill -0 "$child" 2>/dev/null; then break; fi
+    sleep 0.2
+    i=$((i + 1))
+  done
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      # A CLI shim can own a native child: terminate the owned Windows process tree.
+      winpid=$(ps -p "$child" | awk 'NR == 2 { print $4 }')
+      if [ -n "$winpid" ]; then MSYS_NO_PATHCONV=1 taskkill.exe /PID "$winpid" /T /F >/dev/null 2>&1; fi
+      ;;
+    *)
+      # npm shims may own the native CLI; stop the whole owned Unix process tree.
+      descendants=$(ps -axo pid=,ppid= | awk -v root="$child" '
+        { parent[$1] = $2 }
+        END { for (pid in parent) {
+          p = pid; while (p in parent && p != root) p = parent[p]
+          if (p == root) print pid
+        } }')
+      if [ -n "$descendants" ]; then kill -KILL $descendants 2>/dev/null; fi
+      ;;
+  esac
+  kill -KILL "$child" 2>/dev/null
+  wait "$child" 2>/dev/null
+)
 
 status=1
 if grep -m1 '"id":2' "$out"; then status=0; fi
