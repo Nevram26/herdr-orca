@@ -1,16 +1,20 @@
 # Windows counterpart of prefill.sh: pastes an issue task into the Claude the worktree dialog
-# starts, without pressing Enter. `prefill.ps1 <data>`, where data is the task as URI-encoded JSON
-# (issue titles come from strangers: data, never script). It starts itself hidden and returns, then
+# starts, without pressing Enter. `prefill.ps1 <data> <target>`: task and checkout as URI-encoded
+# JSON (issue titles come from strangers: data, never script). It starts hidden and returns, then
 # gives up after 10 minutes (dialog cancelled). Run with -File.
-param([string]$Data, [long]$Since)
+param([string]$Data, [string]$Target, [long]$Since)
+if (-not $Target) { exit 1 }
 if (-not $Since) {
   # Taken here, before the dialog makes the terminal, so a slow start can't miss it.
   $Since = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-  Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", $Data, $Since
+  Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", $Data, $Target, $Since
   exit
 }
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $task = [Uri]::UnescapeDataString($Data) | ConvertFrom-Json
+$folder = [Uri]::UnescapeDataString($Target) | ConvertFrom-Json
+if (-not $folder) { exit 1 }
+$folder = $folder.Replace("\", "/").TrimEnd("/")
 $mark = [char]0x276F # Claude's input line. Written as a code: PowerShell 5.1 misreads this file's non-ASCII.
 $end = (Get-Date).AddMinutes(10)
 $old = @{}
@@ -34,6 +38,7 @@ while ((Get-Date) -lt $end) {
     # By the command that started it: herdr-core names the shell as the foreground on Windows,
     # and Herdr starts Claude through PowerShell.
     if (-not $info.labels.'herdr.space' -or "$($info.argv)" -notmatch '\bclaude\b') { continue }
+    if (-not [String]::Equals("$($info.cwd)".Replace("\", "/").TrimEnd("/"), $folder, [StringComparison]::OrdinalIgnoreCase)) { continue }
     if ("$($info.cwd)".Replace('\', '/') -notlike '*/.herdr/worktrees/*' -or -not (Ready $t)) { continue }
     $keep = Get-Clipboard -Raw
     Set-Clipboard -Value $task
